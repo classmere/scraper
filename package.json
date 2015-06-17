@@ -1,9 +1,10 @@
 {
   "name": "classmere-scaper",
-  "version": "0.0.1",
-  "description": "A course finder for Oregon State University Students",
-  "main": "app.js",
+  "version": "0.0.2",
+  "description": "Oregon State Course Catalog Scraper. Saves into MongoDB",
+  "main": "scraper.js",
   "scripts": {
+    "start": "node --harmony scraper.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
