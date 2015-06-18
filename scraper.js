@@ -1,3 +1,5 @@
+'use strict';
+
 const mongoose = require('mongoose');
 const Schema   = mongoose.Schema;
 const request      = require('request');
@@ -6,6 +8,10 @@ const async        = require('async');
 
 const CATALOG_URL = 'http://catalog.oregonstate.edu/';
 const COURSE_SEARCH_URL = CATALOG_URL + 'CourseSearcher.aspx?chr=abg';
+
+/////////////////////////////////////////////////
+// DATABASE
+/////////////////////////////////////////////////
 
 mongoose.connect(process.env.MONGO_PORT_27017_TCP_ADDR);
 const db = mongoose.connection;
@@ -49,6 +55,10 @@ const courseSchema = new Schema({
 });
 
 const Course = mongoose.model('Course', courseSchema);
+
+/////////////////////////////////////////////////
+// MAIN
+/////////////////////////////////////////////////
 
 db.on('error', console.error.bind(console, 'connection error:'));
 db.once('open', function(callback) {
@@ -110,7 +120,9 @@ function getCourseInfo(baseURL, classURLs, callback) {
   });
 }
 
-// PARSE FUNCTIONS
+/////////////////////////////////////////////////
+// PARSERS
+/////////////////////////////////////////////////
 
 function parseCourseFromHTML(htmlBody) {
   $ = cheerio.load(htmlBody);
@@ -128,12 +140,12 @@ function parseCourseFromHTML(htmlBody) {
   });
 }
 
-// Gets the title from the class site. Regex's follow these steps:
+// Gets course title from the class site. Regex's follow these steps:
 // Select h3, remove abbreviation, remove credits, replace
-// non-words/whitespace with whitespace, remove spaces, tabs,
+// non-words/whitespace with whitespace, remove spaces, tabs &
 // newlines, turn multiple spaces into one, remove spaces on ends
 function parseTitle($) {
-  var title = $('h3').text().trim();
+  var title = $('h3').text();
   title = title.replace(/(^[A-Z]{1,4}\s[0-9]{2,3})/, '');
   title = title.replace(/\(([^\)]+)\)/i, '');
   title = title.replace(/[^\w\s]/gi, ' ');
@@ -142,17 +154,17 @@ function parseTitle($) {
   return title.trim();
 }
 
-// Gets the abbreviation from the class site
+// Gets course abbreviation from the class site
 function parseAbbr($) {
   return $('h3').text().trim().match(/^[A-Z]{1,4}\s[0-9]{2,3}/)[0];
 }
 
-// Gets the credits from the class site
+// Gets credits from the class site
 function parseCredits($) {
   return $('h3').text().match(/\(([^\)]+)\)/i)[1];
 }
 
-// Gets the description from the class site
+// Gets course description from the class site
 function parseDesc($) {
   var desc = $('#aspnetForm').first()
                              .clone()
@@ -165,7 +177,7 @@ function parseDesc($) {
   return desc;
 }
 
-// Parses the table of class meeting times
+// Parses table of class sections
 function parseTable($) {
   var columnNames = [];
   $('th').each(function(i, element) {
@@ -204,34 +216,6 @@ function parseTable($) {
   return sections;
 }
 
-function createSection(sectionDict) {
-  const section = {
-    term: sectionDict.term,
-    startDate: sectionDict.startDate,
-    endDate: sectionDict.endDate,
-    session: sectionDict.session,
-    crn: sectionDict.crn,
-    sectionNumber: sectionDict.sec,
-    credits: sectionDict.cr,
-    instructor: sectionDict.instructor,
-    days: sectionDict.days,
-    startTime: sectionDict.startTime,
-    endTime: sectionDict.endTime,
-    location: sectionDict.location,
-    campus: sectionDict.campus,
-    type: sectionDict.type,
-    status: sectionDict.status,
-    enrollCap: sectionDict.cap,
-    enrolled: sectionDict.curr,
-    waitlistCap: sectionDict.wlcap,
-    waitlisted: sectionDict.wlavail,
-    fees: sectionDict.fees,
-    restrictions: sectionDict.restrictions,
-    comments: sectionDict.comments
-  };
-  return section;
-}
-
 // Returns object w/ keys for days, startTime, endTime, startDate & endDate
 function parseTableDate(text, sectionDict) {
   if (text.match(/\d+/g) && text.indexOf('TBA') === -1) {
@@ -260,4 +244,31 @@ function trimNewlines(desc) {
 
 function formatKey(key) {
   return key.toLowerCase().replace(/[^A-z]/g, '');
+}
+
+function createSection(sectionDict) {
+  return {
+    term: sectionDict.term,
+    startDate: sectionDict.startDate,
+    endDate: sectionDict.endDate,
+    session: sectionDict.session,
+    crn: sectionDict.crn,
+    sectionNumber: sectionDict.sec,
+    credits: sectionDict.cr,
+    instructor: sectionDict.instructor,
+    days: sectionDict.days,
+    startTime: sectionDict.startTime,
+    endTime: sectionDict.endTime,
+    location: sectionDict.location,
+    campus: sectionDict.campus,
+    type: sectionDict.type,
+    status: sectionDict.status,
+    enrollCap: sectionDict.cap,
+    enrolled: sectionDict.curr,
+    waitlistCap: sectionDict.wlcap,
+    waitlisted: sectionDict.wlavail,
+    fees: sectionDict.fees,
+    restrictions: sectionDict.restrictions,
+    comments: sectionDict.comments
+  };
 }
