@@ -2,9 +2,10 @@
 
 const mongoose = require('mongoose');
 const Schema   = mongoose.Schema;
-const request      = require('request');
-const cheerio      = require('cheerio');
-const async        = require('async');
+const request  = require('request');
+const cheerio  = require('cheerio');
+const async    = require('async');
+const moment   = require('moment');
 
 const CATALOG_URL = 'http://catalog.oregonstate.edu/';
 const COURSE_SEARCH_URL = CATALOG_URL + 'CourseSearcher.aspx?chr=abg';
@@ -73,7 +74,7 @@ function getCourseLinks(callback) {
   request(COURSE_SEARCH_URL, function parseSearchPage(error, res, body) {
     if (!error && res.statusCode === 200) {
       var classURLs = [];
-      $ = cheerio.load(body);
+      var $ = cheerio.load(body);
 
       $('a[id^=\'ctl00_ContentPlaceHolder\']').each(function(i, element) {
         var link = $(this).attr('href');
@@ -125,7 +126,7 @@ function getCourseInfo(baseURL, classURLs, callback) {
 /////////////////////////////////////////////////
 
 function parseCourseFromHTML(htmlBody) {
-  $ = cheerio.load(htmlBody);
+  var $ = cheerio.load(htmlBody);
 
   var course = new Course({
     title: parseTitle($),
@@ -221,10 +222,10 @@ function parseTableDate(text, sectionDict) {
   if (text.match(/\d+/g) && text.indexOf('TBA') === -1) {
     sectionDict.days = text
     .match(/([A-Z])+/g)[0];
-    sectionDict.startTime = text
-    .match(/[0-9]{4}/g)[0] + '00';
-    sectionDict.endTime = text
-    .match(/[0-9]{4}/g)[1] + '00';
+    sectionDict.startTime = moment(text
+    .match(/[0-9]{4}/g)[0], 'HHmm');
+    sectionDict.endTime = moment(text
+    .match(/[0-9]{4}/g)[1], 'HHmm');
     sectionDict.startDate = text
     .match(/[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{1,2}/g)[0];
     sectionDict.endDate = text
