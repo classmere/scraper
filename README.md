@@ -1,4 +1,5 @@
-# scraper
+# scraper [![Build Status](https://travis-ci.org/classmere/scraper.svg?branch=feature%2Forchestrate)](https://travis-ci.org/classmere/scraper)
+
 Node.js script that scrapes the entire Oregon State course catalog.
 
 ## Usage
