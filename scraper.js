@@ -16,6 +16,7 @@ const COURSE_SEARCH_URL = CATALOG_URL + 'CourseSearcher.aspx?chr=abg';
 
 const db = oio(config.token, config.server);
 
+// Saves a course to Orchestrate
 function postCourse($) {
   const key = parseAbbr($).replace(/\s+/g, '');
 
@@ -32,6 +33,7 @@ function postCourse($) {
   });
 }
 
+// Saves a section to Orchestrate
 function postSection($, courseKey) {
   const sections = parseTable($);
 
@@ -61,11 +63,25 @@ function postSection($, courseKey) {
       comments: section.comments
     })
     .then(function(result) {
+      const sectionKey = result.path.key;
+      linkSectionToCourse(sectionKey, courseKey);
     })
     .fail(function(err) {
       console.error(err);
     });
   });
+}
+
+// Creates a one-directional relationship between a section and course
+function linkSectionToCourse(sectionKey, courseKey) {
+  db.newGraphBuilder()
+    .create()
+    .from('sections', sectionKey)
+    .related('parentCourse')
+    .to('courses', courseKey)
+    .then(function(res) {
+      console.log(res.statusCode);
+    });
 }
 
 /////////////////////////////////////////////////
