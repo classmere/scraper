@@ -1,7 +1,7 @@
 'use strict';
 
-const mongoose = require('mongoose');
-const Schema   = mongoose.Schema;
+const config   = require('./config');
+const oio      = require('orchestrate');
 const request  = require('request');
 const cheerio  = require('cheerio');
 const async    = require('async');
@@ -14,60 +14,66 @@ const COURSE_SEARCH_URL = CATALOG_URL + 'CourseSearcher.aspx?chr=abg';
 // DATABASE
 /////////////////////////////////////////////////
 
-mongoose.connect(process.env.MONGO_PORT_27017_TCP_ADDR);
-const db = mongoose.connection;
+const db = oio(config.token, config.server);
 
-const sectionSchema = new Schema({
-  term: String,
-  startDate: Date,
-  endDate: Date,
-  session: String,
-  crn: Number,
-  sec: Number,
-  credits: String,
-  instructor: String,
-  days: String,
-  startTime: Date,
-  endTime: Date,
-  location: String,
-  campus: String,
-  type: String,
-  status: String,
-  enrollCap: Number,
-  enrolled: Number,
-  waitlistCap: Number,
-  waitlisted: Number,
-  fees: String,
-  restrictions: String,
-  comments: String
-});
+function postCourse($) {
+  const key = parseAbbr($).replace(/\s+/g, '');
 
-const courseSchema = new Schema({
-  title: String,
-  abbr: String,
-  credits: String,
-  desc: String,
-  sections: [sectionSchema],
-  updated: { type: Date, default: Date.now },
-  meta: {
-    likes: Number,
-    dislikes: Number
-  }
-});
+  db.put('courses',  key, {
+    title: parseTitle($),
+    credits: parseCredits($),
+    desc: parseDesc($)
+  })
+  .then(function(result) {
+    postSection($, key);
+  })
+  .fail(function(err) {
+    console.error(err);
+  });
+}
 
-const Course = mongoose.model('Course', courseSchema);
+function postSection($, courseKey) {
+  const sections = parseTable($);
+
+  sections.forEach(function(section) {
+    db.put('sections', section.crn, {
+      term: section.term,
+      startDate: section.startDate,
+      endDate: section.endDate,
+      session: section.session,
+      crn: section.crn,
+      sectionNumber: section.sec,
+      credits: section.cr,
+      instructor: section.instructor,
+      days: section.days,
+      startTime: section.startTime,
+      endTime: section.endTime,
+      location: section.location,
+      campus: section.campus,
+      type: section.type,
+      status: section.status,
+      enrollCap: section.cap,
+      enrolled: section.curr,
+      waitlistCap: section.wlcap,
+      waitlisted: section.wlavail,
+      fees: section.fees,
+      restrictions: section.restrictions,
+      comments: section.comments
+    })
+    .then(function(result) {
+    })
+    .fail(function(err) {
+      console.error(err);
+    });
+  });
+}
 
 /////////////////////////////////////////////////
 // MAIN
 /////////////////////////////////////////////////
 
-db.on('error', console.error.bind(console, 'connection error:'));
-db.once('open', function(callback) {
-  console.log('Connected to MongoDB @ ' + db.host + ':' + db.port);
-  getCourseLinks(function scrapeComplete(courses, err) {
-    console.log('Scrape complete.');
-    db.close();
-  });
+getCourseLinks(function scrapeComplete(courses, err) {
+  console.log('Scrape complete.');
 });
 
 function getCourseLinks(callback) {
@@ -76,7 +82,7 @@ function getCourseLinks(callback) {
       var classURLs = [];
       var $ = cheerio.load(body);
 
-      $('a[id^=\'ctl00_ContentPlaceHolder\']').each(function(i, element) {
+      $('a[id^=\'ctl00_ContentPlaceHolder\']').each(function() {
         var link = $(this).attr('href');
         classURLs.push(link);
       });
@@ -126,19 +132,8 @@ function getCourseInfo(baseURL, classURLs, callback) {
 /////////////////////////////////////////////////
 
 function parseCourseFromHTML(htmlBody) {
-  var $ = cheerio.load(htmlBody);
-
-  var course = new Course({
-    title: parseTitle($),
-    abbr: parseAbbr($),
-    credits: parseCredits($),
-    desc: parseDesc($),
-    sections: parseTable($)
-  });
-
-  course.save(function(err) {
-    if (err) console.error(err);
-  });
+  const $ = cheerio.load(htmlBody);
+  postCourse($);
 }
 
 // Gets course title from the class site. Regex's follow these steps:
@@ -191,7 +186,7 @@ function parseTable($) {
   var sections = [];
 
   tableRows.each(function(i, element) {
-    var sectionDict = {};
+    var section = {};
     const td = $(this).children('td');
 
     td.each(function(i) {
@@ -201,14 +196,13 @@ function parseTable($) {
       // Parse date
       if (key === 'daytimedate') {
         const text = $(this).text();
-        parseTableDate(text, sectionDict);
+        parseTableDate(text, section);
       }
       else {
-        sectionDict[key] = data;
+        section[key] = data;
       }
     });
 
-    const section = createSection(sectionDict);
     sections.push(section);
   });
 
@@ -218,17 +212,17 @@ function parseTable($) {
 }
 
 // Returns object w/ keys for days, startTime, endTime, startDate & endDate
-function parseTableDate(text, sectionDict) {
+function parseTableDate(text, section) {
   if (text.match(/\d+/g) && text.indexOf('TBA') === -1) {
-    sectionDict.days = text
+    section.days = text
     .match(/([A-Z])+/g)[0];
-    sectionDict.startTime = moment(text
+    section.startTime = moment(text
     .match(/[0-9]{4}/g)[0], 'HHmm');
-    sectionDict.endTime = moment(text
+    section.endTime = moment(text
     .match(/[0-9]{4}/g)[1], 'HHmm');
-    sectionDict.startDate = text
+    section.startDate = text
     .match(/[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{1,2}/g)[0];
-    sectionDict.endDate = text
+    section.endDate = text
     .match(/[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{1,2}/g)[1];
   }
 }
@@ -243,33 +237,7 @@ function trimNewlines(desc) {
   return desc.substring(0, n);
 }
 
+// Formats a table column to be parsed easily
 function formatKey(key) {
   return key.toLowerCase().replace(/[^A-z]/g, '');
-}
-
-function createSection(sectionDict) {
-  return {
-    term: sectionDict.term,
-    startDate: sectionDict.startDate,
-    endDate: sectionDict.endDate,
-    session: sectionDict.session,
-    crn: sectionDict.crn,
-    sectionNumber: sectionDict.sec,
-    credits: sectionDict.cr,
-    instructor: sectionDict.instructor,
-    days: sectionDict.days,
-    startTime: sectionDict.startTime,
-    endTime: sectionDict.endTime,
-    location: sectionDict.location,
-    campus: sectionDict.campus,
-    type: sectionDict.type,
-    status: sectionDict.status,
-    enrollCap: sectionDict.cap,
-    enrolled: sectionDict.curr,
-    waitlistCap: sectionDict.wlcap,
-    waitlisted: sectionDict.wlavail,
-    fees: sectionDict.fees,
-    restrictions: sectionDict.restrictions,
-    comments: sectionDict.comments
-  };
 }
