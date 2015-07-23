@@ -230,16 +230,29 @@ function parseTable($) {
 // Returns object w/ keys for days, startTime, endTime, startDate & endDate
 function parseTableDate(text, section) {
   if (text.match(/\d+/g) && text.indexOf('TBA') === -1) {
+
     section.days = text
-    .match(/([A-Z])+/g)[0];
-    section.startTime = moment(text
-    .match(/[0-9]{4}/g)[0], 'HHmm');
-    section.endTime = moment(text
-    .match(/[0-9]{4}/g)[1], 'HHmm');
-    section.startDate = text
-    .match(/[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{1,2}/g)[0];
-    section.endDate = text
-    .match(/[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{1,2}/g)[1];
+      .match(/([A-Z])+/g)[0];
+
+    section.startTime = moment(
+      text.match(/[0-9]{4}/g)[0],
+       'HHmm'
+     ).format('HH:mm:ss');
+
+    section.endTime = moment(
+      text.match(/[0-9]{4}/g)[1],
+      'HHmm'
+    ).format('HH:mm:ss');
+
+    section.startDate = moment(
+      text.match(/[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{1,2}/g)[0],
+      'MM/DD/YY'
+    ).format('YYYY-MM-DD');
+
+    section.endDate = moment(
+      text.match(/[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{1,2}/g)[1],
+      'MM/DD/YY'
+    ).format('YYYY-MM-DD');
   }
 }
 
