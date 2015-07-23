@@ -93,6 +93,7 @@ function linkSectionToCourse(sectionKey, courseKey) {
     });
 }
 
+// Creates a one-directional relationship between a course and section
 function linkCourseToSection(courseKey, sectionKey) {
   db.newGraphBuilder()
     .create()
