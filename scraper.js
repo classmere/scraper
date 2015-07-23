@@ -20,12 +20,13 @@ const db = oio(config.token, config.server);
 function postCourse($) {
   const key = parseAbbr($).replace(/\s+/g, '');
 
-  db.put('courses',  key, {
+  db.put('courses', key, {
     title: parseTitle($),
     credits: parseCredits($),
     desc: parseDesc($)
   })
   .then(function(result) {
+    console.log('Saved course' + key + ' : ' + result.statusCode);
     postSection($, key);
   })
   .fail(function(err) {
@@ -64,7 +65,9 @@ function postSection($, courseKey) {
     })
     .then(function(result) {
       const sectionKey = result.path.key;
+      console.log('Saved section' + sectionKey + ' : ' + result.statusCode);
       linkSectionToCourse(sectionKey, courseKey);
+      linkCourseToSection(courseKey, sectionKey);
     })
     .fail(function(err) {
       console.error(err);
@@ -79,8 +82,31 @@ function linkSectionToCourse(sectionKey, courseKey) {
     .from('sections', sectionKey)
     .related('parentCourse')
     .to('courses', courseKey)
-    .then(function(res) {
-      console.log(res.statusCode);
+    .then(function(result) {
+      console.log('Linked section' + sectionKey +
+        ' to ' +
+        'course' + courseKey + ' : ' + result.statusCode
+      );
+    })
+    .fail(function(err) {
+      console.error(err);
+    });
+}
+
+function linkCourseToSection(courseKey, sectionKey) {
+  db.newGraphBuilder()
+    .create()
+    .from('courses', courseKey)
+    .related('childSection')
+    .to('sections', sectionKey)
+    .then(function(result) {
+      console.log('Linked course' + courseKey +
+        ' to ' +
+        'section' + sectionKey + ' : ' + result.statusCode
+      );
+    })
+    .fail(function(err) {
+      console.error(err);
     });
 }
 
