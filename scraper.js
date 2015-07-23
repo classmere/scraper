@@ -16,15 +16,17 @@ const COURSE_SEARCH_URL = CATALOG_URL + 'CourseSearcher.aspx?chr=abg';
 
 const db = oio(config.token, config.server);
 
+// Saves a course to Orchestrate
 function postCourse($) {
   const key = parseAbbr($).replace(/\s+/g, '');
 
-  db.put('courses',  key, {
+  db.put('courses', key, {
     title: parseTitle($),
     credits: parseCredits($),
     desc: parseDesc($)
   })
   .then(function(result) {
+    console.log('Saved course' + key + ' : ' + result.statusCode);
     postSection($, key);
   })
   .fail(function(err) {
@@ -32,6 +34,7 @@ function postCourse($) {
   });
 }
 
+// Saves a section to Orchestrate
 function postSection($, courseKey) {
   const sections = parseTable($);
 
@@ -61,11 +64,51 @@ function postSection($, courseKey) {
       comments: section.comments
     })
     .then(function(result) {
+      const sectionKey = result.path.key;
+      console.log('Saved section' + sectionKey + ' : ' + result.statusCode);
+      linkSectionToCourse(sectionKey, courseKey);
+      linkCourseToSection(courseKey, sectionKey);
     })
     .fail(function(err) {
       console.error(err);
     });
   });
+}
+
+// Creates a one-directional relationship between a section and course
+function linkSectionToCourse(sectionKey, courseKey) {
+  db.newGraphBuilder()
+    .create()
+    .from('sections', sectionKey)
+    .related('parentCourse')
+    .to('courses', courseKey)
+    .then(function(result) {
+      console.log('Linked section' + sectionKey +
+        ' to ' +
+        'course' + courseKey + ' : ' + result.statusCode
+      );
+    })
+    .fail(function(err) {
+      console.error(err);
+    });
+}
+
+// Creates a one-directional relationship between a course and section
+function linkCourseToSection(courseKey, sectionKey) {
+  db.newGraphBuilder()
+    .create()
+    .from('courses', courseKey)
+    .related('childSection')
+    .to('sections', sectionKey)
+    .then(function(result) {
+      console.log('Linked course' + courseKey +
+        ' to ' +
+        'section' + sectionKey + ' : ' + result.statusCode
+      );
+    })
+    .fail(function(err) {
+      console.error(err);
+    });
 }
 
 /////////////////////////////////////////////////
@@ -214,16 +257,29 @@ function parseTable($) {
 // Returns object w/ keys for days, startTime, endTime, startDate & endDate
 function parseTableDate(text, section) {
   if (text.match(/\d+/g) && text.indexOf('TBA') === -1) {
+
     section.days = text
-    .match(/([A-Z])+/g)[0];
-    section.startTime = moment(text
-    .match(/[0-9]{4}/g)[0], 'HHmm');
-    section.endTime = moment(text
-    .match(/[0-9]{4}/g)[1], 'HHmm');
-    section.startDate = text
-    .match(/[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{1,2}/g)[0];
-    section.endDate = text
-    .match(/[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{1,2}/g)[1];
+      .match(/([A-Z])+/g)[0];
+
+    section.startTime = moment(
+      text.match(/[0-9]{4}/g)[0],
+       'HHmm'
+     ).format('HH:mm:ss');
+
+    section.endTime = moment(
+      text.match(/[0-9]{4}/g)[1],
+      'HHmm'
+    ).format('HH:mm:ss');
+
+    section.startDate = moment(
+      text.match(/[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{1,2}/g)[0],
+      'MM/DD/YY'
+    ).format('YYYY-MM-DD');
+
+    section.endDate = moment(
+      text.match(/[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{1,2}/g)[1],
+      'MM/DD/YY'
+    ).format('YYYY-MM-DD');
   }
 }
 
