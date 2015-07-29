@@ -1,7 +1,8 @@
 'use strict';
 
 const config   = require('./config');
-const oio      = require('orchestrate');
+const mongoose = require('mongoose');
+const Schema   = mongoose.Schema;
 const request  = require('request');
 const cheerio  = require('cheerio');
 const async    = require('async');
@@ -13,110 +14,70 @@ const COURSE_SEARCH_URL = CATALOG_URL + 'CourseSearcher.aspx?chr=abg';
 /////////////////////////////////////////////////
 // DATABASE
 /////////////////////////////////////////////////
+console.log(process.env.MONGO_URL);
+mongoose.connect(process.env.MONGO_URL);
+const db = mongoose.connection;
 
-const db = oio(config.token, config.server);
+const sectionSchema = new Schema({
+  term: String,
+  startDate: Date,
+  endDate: Date,
+  session: String,
+  crn: {
+    type: Number,
+    unique: true,
+  },
+  sec: Number,
+  credits: String,
+  instructor: String,
+  days: String,
+  startTime: Date,
+  endTime: Date,
+  location: String,
+  campus: String,
+  type: String,
+  status: String,
+  enrollCap: Number,
+  enrolled: Number,
+  waitlistCap: Number,
+  waitlisted: Number,
+  fees: String,
+  restrictions: String,
+  comments: String,
+});
 
-// Saves a course to Orchestrate
-function postCourse($) {
-  const key = parseAbbr($).replace(/\s+/g, '');
+const courseSchema = new Schema({
+  title: {
+    type: String,
+    unique: true,
+  },
+  abbr: String,
+  credits: String,
+  desc: String,
+  sections: [sectionSchema],
+  updated: {
+    type: Date,
+    default: Date.now,
+  },
+  meta: {
+    likes: Number,
+    dislikes: Number,
+  },
+});
 
-  db.put('courses', key, {
-    title: parseTitle($),
-    credits: parseCredits($),
-    desc: parseDesc($)
-  })
-  .then(function(result) {
-    console.log('Saved course' + key + ' : ' + result.statusCode);
-    postSection($, key);
-  })
-  .fail(function(err) {
-    console.error(err);
-  });
-}
-
-// Saves a section to Orchestrate
-function postSection($, courseKey) {
-  const sections = parseTable($);
-
-  sections.forEach(function(section) {
-    db.put('sections', section.crn, {
-      term: section.term,
-      startDate: section.startDate,
-      endDate: section.endDate,
-      session: section.session,
-      crn: section.crn,
-      sectionNumber: section.sec,
-      credits: section.cr,
-      instructor: section.instructor,
-      days: section.days,
-      startTime: section.startTime,
-      endTime: section.endTime,
-      location: section.location,
-      campus: section.campus,
-      type: section.type,
-      status: section.status,
-      enrollCap: section.cap,
-      enrolled: section.curr,
-      waitlistCap: section.wlcap,
-      waitlisted: section.wlavail,
-      fees: section.fees,
-      restrictions: section.restrictions,
-      comments: section.comments
-    })
-    .then(function(result) {
-      const sectionKey = result.path.key;
-      console.log('Saved section' + sectionKey + ' : ' + result.statusCode);
-      linkSectionToCourse(sectionKey, courseKey);
-      linkCourseToSection(courseKey, sectionKey);
-    })
-    .fail(function(err) {
-      console.error(err);
-    });
-  });
-}
-
-// Creates a one-directional relationship between a section and course
-function linkSectionToCourse(sectionKey, courseKey) {
-  db.newGraphBuilder()
-    .create()
-    .from('sections', sectionKey)
-    .related('parentCourse')
-    .to('courses', courseKey)
-    .then(function(result) {
-      console.log('Linked section' + sectionKey +
-        ' to ' +
-        'course' + courseKey + ' : ' + result.statusCode
-      );
-    })
-    .fail(function(err) {
-      console.error(err);
-    });
-}
-
-// Creates a one-directional relationship between a course and section
-function linkCourseToSection(courseKey, sectionKey) {
-  db.newGraphBuilder()
-    .create()
-    .from('courses', courseKey)
-    .related('childSection')
-    .to('sections', sectionKey)
-    .then(function(result) {
-      console.log('Linked course' + courseKey +
-        ' to ' +
-        'section' + sectionKey + ' : ' + result.statusCode
-      );
-    })
-    .fail(function(err) {
-      console.error(err);
-    });
-}
+const Course = mongoose.model('Course', courseSchema);
 
 /////////////////////////////////////////////////
 // MAIN
 /////////////////////////////////////////////////
 
-getCourseLinks(function scrapeComplete(courses, err) {
-  console.log('Scrape complete.');
+db.on('error', console.error.bind(console, 'connection error:'));
+db.once('open', function(callback) {
+  console.log('Connected to MongoDB @ ' + db.host + ':' + db.port);
+  getCourseLinks(function scrapeComplete(courses, err) {
+    console.log('Scrape complete.');
+    db.close();
+  });
 });
 
 function getCourseLinks(callback) {
@@ -125,7 +86,7 @@ function getCourseLinks(callback) {
       var classURLs = [];
       var $ = cheerio.load(body);
 
-      $('a[id^=\'ctl00_ContentPlaceHolder\']').each(function() {
+      $('a[id^=\'ctl00_ContentPlaceHolder\']').each(function(i, element) {
         var link = $(this).attr('href');
         classURLs.push(link);
       });
@@ -149,12 +110,10 @@ function getCourseInfo(baseURL, classURLs, callback) {
       if (error) {
         console.error('Error scraping ' + classURL + '\n' + error);
         asyncCallback();
-      }
-      else if (response.statusCode !== 200) {
+      } else if (response.statusCode !== 200) {
         console.error('Reponse status code == ' + response.statusCode);
         asyncCallback();
-      }
-      else {
+      } else {
         parseCourseFromHTML(body);
         asyncCallback();
       }
@@ -175,8 +134,19 @@ function getCourseInfo(baseURL, classURLs, callback) {
 /////////////////////////////////////////////////
 
 function parseCourseFromHTML(htmlBody) {
-  const $ = cheerio.load(htmlBody);
-  postCourse($);
+  var $ = cheerio.load(htmlBody);
+
+  var course = new Course({
+    title: parseTitle($),
+    abbr: parseAbbr($),
+    credits: parseCredits($),
+    desc: parseDesc($),
+    sections: parseTable($),
+  });
+
+  course.save(function(err) {
+    if (err) console.error(err);
+  });
 }
 
 // Gets course title from the class site. Regex's follow these steps:
@@ -229,7 +199,7 @@ function parseTable($) {
   var sections = [];
 
   tableRows.each(function(i, element) {
-    var section = {};
+    var sectionDict = {};
     const td = $(this).children('td');
 
     td.each(function(i) {
@@ -239,13 +209,13 @@ function parseTable($) {
       // Parse date
       if (key === 'daytimedate') {
         const text = $(this).text();
-        parseTableDate(text, section);
-      }
-      else {
-        section[key] = data;
+        parseTableDate(text, sectionDict);
+      } else {
+        sectionDict[key] = data;
       }
     });
 
+    const section = createSection(sectionDict);
     sections.push(section);
   });
 
@@ -255,31 +225,18 @@ function parseTable($) {
 }
 
 // Returns object w/ keys for days, startTime, endTime, startDate & endDate
-function parseTableDate(text, section) {
+function parseTableDate(text, sectionDict) {
   if (text.match(/\d+/g) && text.indexOf('TBA') === -1) {
-
-    section.days = text
-      .match(/([A-Z])+/g)[0];
-
-    section.startTime = moment(
-      text.match(/[0-9]{4}/g)[0],
-       'HHmm'
-     ).format('HH:mm:ss');
-
-    section.endTime = moment(
-      text.match(/[0-9]{4}/g)[1],
-      'HHmm'
-    ).format('HH:mm:ss');
-
-    section.startDate = moment(
-      text.match(/[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{1,2}/g)[0],
-      'MM/DD/YY'
-    ).format('YYYY-MM-DD');
-
-    section.endDate = moment(
-      text.match(/[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{1,2}/g)[1],
-      'MM/DD/YY'
-    ).format('YYYY-MM-DD');
+    sectionDict.days = text
+    .match(/([A-Z])+/g)[0];
+    sectionDict.startTime = moment(text
+    .match(/[0-9]{4}/g)[0], 'HHmm');
+    sectionDict.endTime = moment(text
+    .match(/[0-9]{4}/g)[1], 'HHmm');
+    sectionDict.startDate = text
+    .match(/[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{1,2}/g)[0];
+    sectionDict.endDate = text
+    .match(/[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{1,2}/g)[1];
   }
 }
 
@@ -293,7 +250,33 @@ function trimNewlines(desc) {
   return desc.substring(0, n);
 }
 
-// Formats a table column to be parsed easily
 function formatKey(key) {
   return key.toLowerCase().replace(/[^A-z]/g, '');
+}
+
+function createSection(sectionDict) {
+  return {
+    term: sectionDict.term,
+    startDate: sectionDict.startDate,
+    endDate: sectionDict.endDate,
+    session: sectionDict.session,
+    crn: sectionDict.crn,
+    sectionNumber: sectionDict.sec,
+    credits: sectionDict.cr,
+    instructor: sectionDict.instructor,
+    days: sectionDict.days,
+    startTime: sectionDict.startTime,
+    endTime: sectionDict.endTime,
+    location: sectionDict.location,
+    campus: sectionDict.campus,
+    type: sectionDict.type,
+    status: sectionDict.status,
+    enrollCap: sectionDict.cap,
+    enrolled: sectionDict.curr,
+    waitlistCap: sectionDict.wlcap,
+    waitlisted: sectionDict.wlavail,
+    fees: sectionDict.fees,
+    restrictions: sectionDict.restrictions,
+    comments: sectionDict.comments,
+  };
 }
