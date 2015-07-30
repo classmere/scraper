@@ -1,6 +1,5 @@
 'use strict';
 
-const config   = require('./config');
 const mongoose = require('mongoose');
 const Schema   = mongoose.Schema;
 const request  = require('request');
