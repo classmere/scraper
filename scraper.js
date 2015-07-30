@@ -13,8 +13,9 @@ const COURSE_SEARCH_URL = CATALOG_URL + 'CourseSearcher.aspx?chr=abg';
 /////////////////////////////////////////////////
 // DATABASE
 /////////////////////////////////////////////////
-console.log(process.env.MONGO_URL);
-mongoose.connect(process.env.MONGO_URL);
+const mongoURL = process.argv[2] || process.env.MONGO_URL;
+
+mongoose.connect(mongoURL);
 const db = mongoose.connection;
 
 const sectionSchema = new Schema({
@@ -70,7 +71,11 @@ const Course = mongoose.model('Course', courseSchema);
 // MAIN
 /////////////////////////////////////////////////
 
-db.on('error', console.error.bind(console, 'connection error:'));
+db.on('error', function(err) {
+  console.error('connection error: ' + err);
+  process.exit();
+});
+
 db.once('open', function(callback) {
   console.log('Connected to MongoDB @ ' + db.host + ':' + db.port);
   getCourseLinks(function scrapeComplete(courses, err) {
