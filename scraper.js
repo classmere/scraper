@@ -1,7 +1,6 @@
 'use strict';
 
-const mongoose = require('mongoose');
-const Schema   = mongoose.Schema;
+const pg       = require('pg').native;
 const request  = require('request');
 const cheerio  = require('cheerio');
 const async    = require('async');
@@ -13,77 +12,33 @@ const COURSE_SEARCH_URL = CATALOG_URL + 'CourseSearcher.aspx?chr=abg';
 /////////////////////////////////////////////////
 // DATABASE
 /////////////////////////////////////////////////
-const mongoURL = process.argv[2] || process.env.MONGO_URL;
 
-mongoose.connect(mongoURL);
-const db = mongoose.connection;
+const PG_URL = process.argv[2] || process.env.DATABASE_URL;
+const client = new pg.Client(PG_URL);
 
-const sectionSchema = new Schema({
-  term: String,
-  startDate: Date,
-  endDate: Date,
-  session: String,
-  crn: {
-    type: Number,
-    unique: true,
-  },
-  sec: Number,
-  credits: String,
-  instructor: String,
-  days: String,
-  startTime: Date,
-  endTime: Date,
-  location: String,
-  campus: String,
-  type: String,
-  status: String,
-  enrollCap: Number,
-  enrolled: Number,
-  waitlistCap: Number,
-  waitlisted: Number,
-  fees: String,
-  restrictions: String,
-  comments: String,
+client.connect(function(err) {
+  if (err) {
+    console.error('could not connect to postgres', err);
+    process.exit();
+  } else {
+    console.log('Connected to PostgreSQL');
+    getCourseLinks(function(courses, err) {
+      console.log('Scrape complete.');
+      client.end();
+    });
+  }
 });
 
-const courseSchema = new Schema({
-  title: {
-    type: String,
-    unique: true,
-  },
-  abbr: String,
-  credits: String,
-  desc: String,
-  sections: [sectionSchema],
-  updated: {
-    type: Date,
-    default: Date.now,
-  },
-  meta: {
-    likes: Number,
-    dislikes: Number,
-  },
+client.on('error', function(err) {
+  console.error('PG ERROR ' + err);
+  process.exit();
 });
-
-const Course = mongoose.model('Course', courseSchema);
 
 /////////////////////////////////////////////////
 // MAIN
 /////////////////////////////////////////////////
 
-db.on('error', function(err) {
-  console.error('connection error: ' + err);
-  process.exit();
-});
-
-db.once('open', function(callback) {
-  console.log('Connected to MongoDB @ ' + db.host + ':' + db.port);
-  getCourseLinks(function scrapeComplete(courses, err) {
-    console.log('Scrape complete.');
-    db.close();
-  });
-});
-
+// Scrapes the search page for links to all course pages
 function getCourseLinks(callback) {
   request(COURSE_SEARCH_URL, function parseSearchPage(error, res, body) {
     if (!error && res.statusCode === 200) {
@@ -102,6 +57,7 @@ function getCourseLinks(callback) {
   });
 }
 
+// Loads each course page into cheerio and calls parseCourse on it
 function getCourseInfo(baseURL, classURLs, callback) {
   var index = 1;
 
@@ -110,17 +66,19 @@ function getCourseInfo(baseURL, classURLs, callback) {
     console.log('Scraping ' + index++ + ' of ' + classURLs.length);
     console.log('URL: ' + classURL);
 
-    request(classURL, function scrapeClassPage(error, response, body) {
+    request(classURL, function(error, response, body) {
       if (error) {
         console.error('Error scraping ' + classURL + '\n' + error);
-        asyncCallback();
       } else if (response.statusCode !== 200) {
         console.error('Reponse status code == ' + response.statusCode);
-        asyncCallback();
       } else {
-        parseCourseFromHTML(body);
-        asyncCallback();
+        const $ = cheerio.load(body);
+        parseCourse($);
+
+        // parseSection($);
       }
+
+      asyncCallback();
     });
   },
 
@@ -137,19 +95,31 @@ function getCourseInfo(baseURL, classURLs, callback) {
 // PARSERS
 /////////////////////////////////////////////////
 
-function parseCourseFromHTML(htmlBody) {
-  var $ = cheerio.load(htmlBody);
-
-  var course = new Course({
-    title: parseTitle($),
-    abbr: parseAbbr($),
-    credits: parseCredits($),
-    desc: parseDesc($),
-    sections: parseTable($),
+function parseCourse($) {
+  var insertCourse = client.query({
+    text: 'INSERT INTO course (' +
+      'abbr,' +
+      'title,' +
+      'credits,' +
+      'description' +
+    ') VALUES ($1, $2, $3, $4)',
+    values: [
+      parseAbbr($),
+      parseTitle($),
+      parseCredits($),
+      parseDesc($),
+    ],
+    name: 'insert course',
   });
 
-  course.save(function(err) {
-    if (err) console.error(err);
+  insertCourse.on('row', function(row) {
+    console.log(row);
+
+    // insert sections here using course key
+  });
+
+  insertCourse.on('error', function(err) {
+    console.error(err);
   });
 }
 
@@ -174,7 +144,10 @@ function parseAbbr($) {
 
 // Gets credits from the class site
 function parseCredits($) {
-  return $('h3').text().match(/\(([^\)]+)\)/i)[1];
+  return $('h3')
+  .text()
+  .match(/\(([^\)]+)\)/i)[1]
+  .split('-');
 }
 
 // Gets course description from the class site
@@ -191,7 +164,7 @@ function parseDesc($) {
 }
 
 // Parses table of class sections
-function parseTable($) {
+function parseSection($) {
   var columnNames = [];
   $('th').each(function(i, element) {
     var columnName = $(this).text().replace(/\r?\n|\r|\t/g, '');
@@ -213,14 +186,11 @@ function parseTable($) {
       // Parse date
       if (key === 'daytimedate') {
         const text = $(this).text();
-        parseTableDate(text, sectionDict);
+        parseSectionDate(text, sectionDict);
       } else {
         sectionDict[key] = data;
       }
     });
-
-    const section = createSection(sectionDict);
-    sections.push(section);
   });
 
   // First element will be categories, so remove it
@@ -229,7 +199,7 @@ function parseTable($) {
 }
 
 // Returns object w/ keys for days, startTime, endTime, startDate & endDate
-function parseTableDate(text, sectionDict) {
+function parseSectionDate(text, sectionDict) {
   if (text.match(/\d+/g) && text.indexOf('TBA') === -1) {
     sectionDict.days = text
     .match(/([A-Z])+/g)[0];
@@ -256,31 +226,4 @@ function trimNewlines(desc) {
 
 function formatKey(key) {
   return key.toLowerCase().replace(/[^A-z]/g, '');
-}
-
-function createSection(sectionDict) {
-  return {
-    term: sectionDict.term,
-    startDate: sectionDict.startDate,
-    endDate: sectionDict.endDate,
-    session: sectionDict.session,
-    crn: sectionDict.crn,
-    sectionNumber: sectionDict.sec,
-    credits: sectionDict.cr,
-    instructor: sectionDict.instructor,
-    days: sectionDict.days,
-    startTime: sectionDict.startTime,
-    endTime: sectionDict.endTime,
-    location: sectionDict.location,
-    campus: sectionDict.campus,
-    type: sectionDict.type,
-    status: sectionDict.status,
-    enrollCap: sectionDict.cap,
-    enrolled: sectionDict.curr,
-    waitlistCap: sectionDict.wlcap,
-    waitlisted: sectionDict.wlavail,
-    fees: sectionDict.fees,
-    restrictions: sectionDict.restrictions,
-    comments: sectionDict.comments,
-  };
 }
