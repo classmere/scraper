@@ -5,6 +5,7 @@ const request  = require('request');
 const cheerio  = require('cheerio');
 const async    = require('async');
 const moment   = require('moment');
+const _        = require('underscore');
 
 const CATALOG_URL = 'http://catalog.oregonstate.edu/';
 const COURSE_SEARCH_URL = CATALOG_URL + 'CourseSearcher.aspx?chr=abg';
@@ -24,15 +25,121 @@ client.connect(function(err) {
     console.log('Connected to PostgreSQL');
     getCourseLinks(function(courses, err) {
       console.log('Scrape complete.');
-      client.end();
+      client.on('drain', client.end.bind(client));
     });
   }
 });
 
 client.on('error', function(err) {
-  console.error('PG ERROR ' + err);
-  process.exit();
+  throw(err);
 });
+
+function insertCourseAndSections(courseObject, sectionObjects) {
+  var courseInsertion = insertCourse(courseObject, function(key) {
+    insertSections(sectionObjects, key);
+  });
+}
+
+function insertCourse(courseObject, callback) {
+  const course = courseObject;
+  var query = client.query({
+    text: 'INSERT INTO course (' +
+      'abbr,' +
+      'title,' +
+      'credits,' +
+      'description' +
+    ') VALUES ($1, $2, $3, $4)' +
+    'RETURNING id',
+    values: [
+      course.abbr,
+      course.title,
+      course.credits,
+      course.description,
+    ],
+    name: 'insert course',
+  });
+
+  query.on('row', function(row) {
+    const id = row.id;
+    callback(id);
+  });
+
+  query.on('error', function(err) {
+    console.error(err);
+  });
+}
+
+function insertSections(sectionObjectArray, courseId) {
+  _.each(sectionObjectArray, function(sectionObject) {
+    insertSection(sectionObject, courseId);
+  });
+}
+
+function insertSection(sectionObject, courseId) {
+  const section = sectionObject;
+
+  var query = client.query({
+    text: 'INSERT INTO section (' +
+      'crn,' +
+      'course_id,' +
+      'term,' +
+      'start_date,' +
+      'end_date,' +
+      'section,' +
+      'session,' +
+      'credits,' +
+      'instructor,' +
+      'days,' +
+      'start_time,' +
+      'end_time,' +
+      'location,' +
+      'campus,' +
+      'type,' +
+      'status,' +
+      'capacity,' +
+      'enrolled,' +
+      'waitlist_cap,' +
+      'waitlist_current,' +
+      'fees,' +
+      'restrictions,' +
+      'comments' +
+    ') VALUES (' +
+      '$1 , $2 , $3 , $4 , $5 , $6 , $7 , $8 , $9 , $10,' +
+      '$11, $12, $13, $14, $15, $16, $17, $18, $19, $20,' +
+      '$21, $22, $23' +
+    ')',
+    values: [
+      section.crn,
+      courseId,
+      section.term,
+      section.startDate,
+      section.endDate,
+      section.sec,
+      section.session,
+      [section.cr], // TODO: Make this include the correct range
+      section.instructor,
+      section.days,
+      section.startTime,
+      section.endTime,
+      section.location,
+      section.campus,
+      section.type,
+      section.status,
+      section.cap,
+      section.curr,
+      section.wlcurr,
+      section.wlcap,
+      section.fees,
+      section.restrictions,
+      section.comments,
+    ],
+    name: 'insert section',
+  });
+
+  query.on('error', function(err) {
+    console.error(err);
+  });
+}
 
 /////////////////////////////////////////////////
 // MAIN
@@ -73,9 +180,10 @@ function getCourseInfo(baseURL, classURLs, callback) {
         console.error('Reponse status code == ' + response.statusCode);
       } else {
         const $ = cheerio.load(body);
-        parseCourse($);
 
-        // parseSection($);
+        const courseObject = parseCourse($);
+        var sectionObjects = parseSections($);
+        insertCourseAndSections(courseObject, sectionObjects);
       }
 
       asyncCallback();
@@ -96,31 +204,12 @@ function getCourseInfo(baseURL, classURLs, callback) {
 /////////////////////////////////////////////////
 
 function parseCourse($) {
-  var insertCourse = client.query({
-    text: 'INSERT INTO course (' +
-      'abbr,' +
-      'title,' +
-      'credits,' +
-      'description' +
-    ') VALUES ($1, $2, $3, $4)',
-    values: [
-      parseAbbr($),
-      parseTitle($),
-      parseCredits($),
-      parseDesc($),
-    ],
-    name: 'insert course',
-  });
-
-  insertCourse.on('row', function(row) {
-    console.log(row);
-
-    // insert sections here using course key
-  });
-
-  insertCourse.on('error', function(err) {
-    console.error(err);
-  });
+  return {
+    abbr: parseAbbr($),
+    title: parseTitle($),
+    credits: parseCredits($),
+    description: parseDesc($),
+  };
 }
 
 // Gets course title from the class site. Regex's follow these steps:
@@ -164,7 +253,7 @@ function parseDesc($) {
 }
 
 // Parses table of class sections
-function parseSection($) {
+function parseSections($) {
   var columnNames = [];
   $('th').each(function(i, element) {
     var columnName = $(this).text().replace(/\r?\n|\r|\t/g, '');
@@ -175,11 +264,12 @@ function parseSection($) {
   var tableRows = $('#ctl00_ContentPlaceHolder1_SOCListUC1_gvOfferings > tr ');
   var sections = [];
 
-  tableRows.each(function(i, element) {
+  tableRows.each(function parseSection(i, element) {
     var sectionDict = {};
     const td = $(this).children('td');
 
     td.each(function(i) {
+      // trim is likely not necessary
       const data = $(this).text().replace(/\s{2,}/g, ' ').trim();
       const key = formatKey(columnNames[i % columnNames.length]);
 
@@ -191,6 +281,8 @@ function parseSection($) {
         sectionDict[key] = data;
       }
     });
+
+    sections.push(sectionDict);
   });
 
   // First element will be categories, so remove it
@@ -202,13 +294,19 @@ function parseSection($) {
 function parseSectionDate(text, sectionDict) {
   if (text.match(/\d+/g) && text.indexOf('TBA') === -1) {
     sectionDict.days = text
-    .match(/([A-Z])+/g)[0];
+    .match(/([A-Z])+/g)[0].split('');
+
     sectionDict.startTime = moment(text
-    .match(/[0-9]{4}/g)[0], 'HHmm');
+    .match(/[0-9]{4}/g)[0], 'HHmm')
+    .format('HH:mm:ss');
+
     sectionDict.endTime = moment(text
-    .match(/[0-9]{4}/g)[1], 'HHmm');
+    .match(/[0-9]{4}/g)[1], 'HHmm')
+    .format('HH:mm:ss');
+
     sectionDict.startDate = text
     .match(/[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{1,2}/g)[0];
+
     sectionDict.endDate = text
     .match(/[0-9]{1,2}\/[0-9]{1,2}\/[0-9]{1,2}/g)[1];
   }
