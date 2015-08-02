@@ -25,6 +25,7 @@
     "pg": "^4.4.0",
     "pg-native": "^1.8.1",
     "request": "^2.55.0",
-    "underscore": "^1.8.3"
+    "underscore": "^1.8.3",
+    "yargs": "^3.17.1"
   }
 }

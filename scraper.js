@@ -6,33 +6,49 @@ const cheerio  = require('cheerio');
 const async    = require('async');
 const moment   = require('moment');
 const _        = require('underscore');
+const argv     = require('yargs').argv;
 
 const CATALOG_URL = 'http://catalog.oregonstate.edu/';
 const COURSE_SEARCH_URL = CATALOG_URL + 'CourseSearcher.aspx?chr=abg';
+const SAVE = !argv.nosave;
+
+if (argv.help) {
+  console.log('OSU Course Catalog scraper. Supply a Postgres database to ' +
+  'into with -db or supply a DB_URL environment var. Skip saving with ' +
+  '--nosave option.');
+  process.exit();
+}
 
 /////////////////////////////////////////////////
 // DATABASE
 /////////////////////////////////////////////////
 
-const PG_URL = process.argv[2] || process.env.DATABASE_URL;
+const PG_URL = argv.db || process.env.DATABASE_URL;
 const client = new pg.Client(PG_URL);
 
-client.connect(function(err) {
-  if (err) {
-    console.error('could not connect to postgres', err);
-    process.exit();
-  } else {
-    console.log('Connected to PostgreSQL');
-    getCourseLinks(function(courses, err) {
-      console.log('Scrape complete.');
-      client.on('drain', client.end.bind(client));
-    });
-  }
-});
+if (SAVE) {
+  client.connect(function(err) {
+    if (err) {
+      console.error('could not connect to postgres', err);
+      process.exit();
+    } else {
+      console.log('Connected to PostgreSQL');
+      getCourseLinks(function(courses, err) {
+        console.log('Scrape complete.');
+        client.on('drain', client.end.bind(client));
+      });
+    }
+  });
 
-client.on('error', function(err) {
-  throw(err);
-});
+  client.on('error', function(err) {
+    throw(err);
+  });
+
+} else {
+  getCourseLinks(function(courses, err) {
+    console.log('Scrape complete.');
+  });
+}
 
 function insertCourseAndSections(courseObject, sectionObjects) {
   var courseInsertion = insertCourse(courseObject, function(key) {
@@ -183,7 +199,9 @@ function getCourseInfo(baseURL, classURLs, callback) {
 
         const courseObject = parseCourse($);
         var sectionObjects = parseSections($);
-        insertCourseAndSections(courseObject, sectionObjects);
+        if (SAVE) {
+          insertCourseAndSections(courseObject, sectionObjects);
+        }
       }
 
       asyncCallback();
