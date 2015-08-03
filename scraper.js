@@ -132,7 +132,7 @@ function insertSection(sectionObject, courseId) {
       section.endDate,
       section.sec,
       section.session,
-      [section.cr], // TODO: Make this include the correct range
+      section.cr,
       section.instructor,
       section.days,
       section.startTime,
@@ -249,12 +249,15 @@ function parseAbbr($) {
   return $('h3').text().trim().match(/^[A-Z]{1,4}\s[0-9]{2,3}/)[0];
 }
 
-// Gets credits from the class site
+// Gets credits from the class site and parses string array to integer array
 function parseCredits($) {
   return $('h3')
   .text()
   .match(/\(([^\)]+)\)/i)[1]
-  .split('-');
+  .split('-')
+  .map(function(value) {
+    return parseInt(value, 10);
+  });
 }
 
 // Gets course description from the class site
