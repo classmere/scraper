@@ -236,12 +236,13 @@ function parseCourse($) {
 // newlines, turn multiple spaces into one, remove spaces on ends
 function parseTitle($) {
   var title = $('h3').text();
+  title = title.trim();
   title = title.replace(/(^[A-Z]{1,4}\s[0-9]{2,3})/, '');
   title = title.replace(/\(([^\)]+)\)/i, '');
   title = title.replace(/[^\w\s]/gi, ' ');
   title = title.replace(/\r?\n|\r|\t/g, '');
   title = title.replace(/\ {2,}/g, ' ');
-  return title.trim();
+  return title;
 }
 
 // Gets course abbreviation from the class site
