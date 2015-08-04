@@ -19,9 +19,9 @@ if (argv.help) {
   process.exit();
 }
 
-/////////////////////////////////////////////////
-// DATABASE
-/////////////////////////////////////////////////
+/*
+  DATABASE
+*/
 
 const PG_URL = argv.db || process.env.DATABASE_URL;
 const client = new pg.Client(PG_URL);
@@ -157,10 +157,9 @@ function insertSection(sectionObject, courseId) {
   });
 }
 
-/////////////////////////////////////////////////
-// MAIN
-/////////////////////////////////////////////////
-
+/*
+  MAIN
+*/
 // Scrapes the search page for links to all course pages
 function getCourseLinks(callback) {
   request(COURSE_SEARCH_URL, function parseSearchPage(error, res, body) {
@@ -217,9 +216,9 @@ function getCourseInfo(baseURL, classURLs, callback) {
   });
 }
 
-/////////////////////////////////////////////////
-// PARSERS
-/////////////////////////////////////////////////
+/*
+  PARSERS
+*/
 
 function parseCourse($) {
   return {
@@ -291,7 +290,7 @@ function parseSections($) {
     const td = $(this).children('td');
 
     td.each(function(i) {
-      // trim is likely not necessary
+      // Trim is likely not necessary
       const data = $(this).text().replace(/\s{2,}/g, ' ').trim();
       const key = formatKey(columnNames[i % columnNames.length]);
 
@@ -334,9 +333,9 @@ function parseSectionDate(text, sectionDict) {
   }
 }
 
-/////////////////////////////////////////////////
-// HELPER FUNCTIONS
-/////////////////////////////////////////////////
+/*
+  HELPER FUNCTIONS
+*/
 
 function trimNewlines(desc) {
   var n = desc.indexOf('\n');
