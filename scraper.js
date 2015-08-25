@@ -14,7 +14,7 @@ const SAVE = !argv.nosave;
 
 if (argv.help) {
   console.log('OSU Course Catalog scraper. Supply a Postgres database to ' +
-  'into with -db or supply a DB_URL environment var. Skip saving with ' +
+  'save into with -db or supply a DB_URL environment var. Skip saving with ' +
   '--nosave option.');
   process.exit();
 }
