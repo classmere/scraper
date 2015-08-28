@@ -8,8 +8,8 @@ const moment   = require('moment');
 const _        = require('underscore');
 const argv     = require('yargs').argv;
 
-const Course   = require('./schemas/Course').Course;
-const Section  = require('./schemas/Section').Section;
+const Course   = require('./schemas').Course;
+const Section  = require('./schemas').Section;
 
 const CATALOG_URL = 'http://catalog.oregonstate.edu/';
 const COURSE_SEARCH_URL = CATALOG_URL + 'CourseSearcher.aspx?chr=abg';
@@ -42,7 +42,7 @@ function insertCourseAndSections(courseObject, sectionObjects) {
   });
 
   // Iterate through the array of sectionObjects and insert each
-  sectionObjects.forEach(function(s) {
+  const sections = sectionObjects.map(function(s) {
     const section = new Section({
       term: s.term,
       session: s.session,
@@ -70,11 +70,10 @@ function insertCourseAndSections(courseObject, sectionObjects) {
 
     // Join sections with their course
     section.course = course;
-
-    section.saveAll().then(function(result) {
-      console.log(JSON.stringify(result));
-    });
+    return section;
   });
+  course.sections = sections;
+  course.saveAll()
 }
 
 /*

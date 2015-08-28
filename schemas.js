@@ -1,6 +1,13 @@
 const thinky = require('thinky')();
 const type   = thinky.type;
-const Course = require('./Course').Course;
+
+const Course = thinky.createModel('Course', {
+  id: type.string(),
+  title: type.string().required(),
+  abbr: type.string().max(10).required(),
+  credits: [type.number()],
+  description: type.string(),
+});
 
 const Section = thinky.createModel('Section', {
   id: type.string(),
@@ -29,7 +36,10 @@ const Section = thinky.createModel('Section', {
   comments: type.string(),
 });
 
+Course.hasMany(Section, 'sections', 'id', 'idCourse');
 Section.belongsTo(Course, 'course', 'idCourse', 'id');
 
-exports.Section = Section;
+Course.ensureIndex('abbr');
 
+exports.Course = Course;
+exports.Section = Section;
