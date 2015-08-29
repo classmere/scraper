@@ -7,6 +7,7 @@ const Course = thinky.createModel('Course', {
   abbr: type.string().max(10).required(),
   credits: [type.number().integer().max(16)],
   description: type.string(),
+  dateScraped: type.date().default(Date.now()),
 });
 
 const Section = thinky.createModel('Section', {
