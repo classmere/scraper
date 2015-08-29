@@ -1,11 +1,9 @@
 'use strict';
 
-const thinky   = require('thinky')();
 const request  = require('request');
 const cheerio  = require('cheerio');
 const async    = require('async');
 const moment   = require('moment');
-const _        = require('underscore');
 const argv     = require('yargs').argv;
 
 const Course   = require('./schemas').Course;
@@ -32,7 +30,6 @@ getCourseLinks(function scrapeComplete() {
  */
 
 function insertCourseAndSections(courseObject, sectionObjects) {
-
   // Insert a Course
   const course = new Course({
     title: courseObject.title,
@@ -42,7 +39,7 @@ function insertCourseAndSections(courseObject, sectionObjects) {
   });
 
   // Iterate through the array of sectionObjects and insert each
-  const sections = sectionObjects.map(function(s) {
+  const sections = sectionObjects.map((s) => {
     const section = new Section({
       term: s.term,
       session: s.session,
@@ -73,7 +70,7 @@ function insertCourseAndSections(courseObject, sectionObjects) {
     return section;
   });
   course.sections = sections;
-  course.saveAll()
+  course.saveAll();
 }
 
 /*
@@ -84,31 +81,31 @@ function insertCourseAndSections(courseObject, sectionObjects) {
 function getCourseLinks(callback) {
   request(COURSE_SEARCH_URL, function parseSearchPage(error, res, body) {
     if (!error && res.statusCode === 200) {
-      var classURLs = [];
-      var $ = cheerio.load(body);
+      const classURLs = [];
+      const $ = cheerio.load(body);
 
-      $('a[id^=\'ctl00_ContentPlaceHolder\']').each(function(i, element) {
-        var link = $(this).attr('href');
+      $('a[id^=\'ctl00_ContentPlaceHolder\']').each(function getLink() {
+        const link = $(this).attr('href');
         classURLs.push(link);
       });
 
       // First two elements are currently trash, don't attempt to scrape
       classURLs.splice(0, 2);
-      return getCourseInfo(CATALOG_URL, classURLs, callback);
+      return scrapeCourses(CATALOG_URL, classURLs, callback);
     }
   });
 }
 
 // Loads each course page into cheerio and calls parseCourse on it
-function getCourseInfo(baseURL, classURLs, callback) {
-  var index = 1;
+function scrapeCourses(baseURL, classURLs, callback) {
+  let index = 1;
 
-  async.eachSeries(classURLs, function(url, asyncCallback) {
+  async.eachSeries(classURLs, function iterateThroughCourses(url, asyncCallback) {
     const classURL = baseURL + url;
     console.log('Scraping ' + index++ + ' of ' + classURLs.length);
     console.log('URL: ' + classURL);
 
-    request(classURL, function(error, response, body) {
+    request(classURL, function requestCoursePage(error, response, body) {
       if (error) {
         console.error('Error scraping ' + classURL + '\n' + error);
       } else if (response.statusCode !== 200) {
@@ -117,7 +114,7 @@ function getCourseInfo(baseURL, classURLs, callback) {
         const $ = cheerio.load(body);
 
         const courseObject = parseCourse($);
-        var sectionObjects = parseSections($);
+        const sectionObjects = parseSections($);
         if (SAVE) {
           insertCourseAndSections(courseObject, sectionObjects);
         }
@@ -154,13 +151,13 @@ function parseCourse($) {
 // non-words/whitespace with whitespace, remove spaces, tabs &
 // newlines, turn multiple spaces into one, remove spaces on ends
 function parseTitle($) {
-  var title = $('h3').text();
-  title = title.trim();
-  title = title.replace(/(^[A-Z]{1,4}\s[0-9]{2,3})/, '');
-  title = title.replace(/\(([^\)]+)\)/i, '');
-  title = title.replace(/[^\w\s]/gi, ' ');
-  title = title.replace(/\r?\n|\r|\t/g, '');
-  title = title.replace(/\ {2,}/g, ' ');
+  const title = $('h3').text()
+  .trim()
+  .replace(/(^[A-Z]{1,4}\s[0-9]{2,3})/, '')
+  .replace(/\(([^\)]+)\)/i, '')
+  .replace(/[^\w\s]/gi, ' ')
+  .replace(/\r?\n|\r|\t/g, '')
+  .replace(/\ {2,}/g, ' ');
   return title;
 }
 
@@ -175,20 +172,21 @@ function parseCredits($) {
   .text()
   .match(/\(([^\)]+)\)/i)[1]
   .split('-')
-  .map(function(value) {
+  .map((value) => {
     return parseInt(value, 10);
   });
 }
 
 // Gets course description from the class site
 function parseDesc($) {
-  var desc = $('#aspnetForm').first()
-                             .clone()
-                             .children()
-                             .remove()
-                             .end()
-                             .text()
-                             .trim();
+  let desc = $('#aspnetForm')
+  .first()
+  .clone()
+  .children()
+  .remove()
+  .end()
+  .text()
+  .trim();
   desc = trimNewlines(desc);
   return desc;
 }
@@ -200,21 +198,22 @@ function parseDesc($) {
  */
 
 function parseSections($) {
-  var columnNames = [];
-  $('th').each(function(i, element) {
-    var columnName = $(this).text().replace(/\r?\n|\r|\t/g, '');
-    columnName = columnName.replace(/\ {2,}/g, '');
+  const columnNames = [];
+  $('th').each(function parseSectionTableHeader() {
+    const columnName = $(this).text()
+    .replace(/\r?\n|\r|\t/g, '')
+    .replace(/\ {2,}/g, '');
     columnNames.push(columnName);
   });
 
-  var tableRows = $('#ctl00_ContentPlaceHolder1_SOCListUC1_gvOfferings > tr ');
-  var sections = [];
+  const tableRows = $('#ctl00_ContentPlaceHolder1_SOCListUC1_gvOfferings > tr ');
+  const sections = [];
 
-  tableRows.each(function parseSection(i, element) {
-    var sectionDict = {};
+  tableRows.each(function parseSection() {
+    const sectionDict = {};
     const td = $(this).children('td');
 
-    td.each(function(i) {
+    td.each(function parseSectionTableRow(i) {
       // Trim is likely not necessary
       const data = $(this).text().replace(/\s{2,}/g, ' ').trim();
       const key = formatKey(columnNames[i % columnNames.length]);
@@ -223,6 +222,11 @@ function parseSections($) {
       if (key === 'daytimedate') {
         const text = $(this).text();
         parseSectionDate(text, sectionDict);
+      } else if (key === 'cr') {
+        const cr = data.split('-');
+        // Check if the first element is blank
+        sectionDict.cr = cr[0].match(/\d{1,2}/g) ? cr : null;
+        console.log(sectionDict.cr);
       } else {
         sectionDict[key] = data;
       }
@@ -263,7 +267,7 @@ function parseSectionDate(text, sectionDict) {
  */
 
 function trimNewlines(desc) {
-  var n = desc.indexOf('\n');
+  let n = desc.indexOf('\n');
   n = n === -1 ? desc.length : n;
   return desc.substring(0, n);
 }
