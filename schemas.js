@@ -5,7 +5,7 @@ const Course = thinky.createModel('Course', {
   id: type.string(),
   title: type.string().required(),
   abbr: type.string().max(10).required(),
-  credits: [type.number()],
+  credits: [type.number().integer().max(16)],
   description: type.string(),
 });
 
@@ -16,11 +16,11 @@ const Section = thinky.createModel('Section', {
   session: type.string(),
   crn: type.number().integer().max(99999),
   section: type.number().integer().max(999),
-  credits: type.number().integer().max(16), // TODO: make this array of credit range
+  credits: [type.number().integer().max(16)],
   instructor: type.string(),
   startTime: type.string(),
   endTime: type.string(),
-  days: type.string().max(5),
+  days: type.string().max(7),
   startDate: type.date(),
   endDate: type.date(),
   location: type.string(),
