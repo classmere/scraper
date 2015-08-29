@@ -12,6 +12,6 @@
     "quotes": [2, "single"],
     "strict": [2, "never"],
     "semi": 2,
-    "no-console": 0
+    "no-console": 0,
   }
 }
