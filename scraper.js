@@ -226,7 +226,6 @@ function parseSections($) {
         const cr = data.split('-');
         // Check if the first element is blank
         sectionDict.cr = cr[0].match(/\d{1,2}/g) ? cr : null;
-        console.log(sectionDict.cr);
       } else {
         sectionDict[key] = data;
       }
