@@ -3,6 +3,7 @@ const thinky = require('thinky')({
   port: process.env.DATABASE_PORT,
   db: process.env.DATABASE_DB,
   authKey: process.env.DATABASE_KEY,
+  max: 10,
 });
 const type   = thinky.type;
 
