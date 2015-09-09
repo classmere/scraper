@@ -28,3 +28,4 @@ node_modules
 .DS_Store
 config.js
 .env
+rethinkdb_data

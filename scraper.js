@@ -1,12 +1,13 @@
 'use strict';
 
-const pg       = require('pg').native;
 const request  = require('request');
 const cheerio  = require('cheerio');
 const async    = require('async');
 const moment   = require('moment');
-const _        = require('underscore');
 const argv     = require('yargs').argv;
+
+const Course   = require('./schemas').Course;
+const Section  = require('./schemas').Section;
 
 const CATALOG_URL = 'http://catalog.oregonstate.edu/';
 const COURSE_SEARCH_URL = CATALOG_URL + 'CourseSearcher.aspx?chr=abg';
@@ -19,176 +20,92 @@ if (argv.help) {
   process.exit();
 }
 
+getCourseLinks(function scrapeComplete() {
+  console.log('Scrape complete!');
+  process.exit();
+});
+
 /*
-  DATABASE
-*/
-
-const PG_URL = argv.db || process.env.DATABASE_URL;
-const client = new pg.Client(PG_URL);
-
-if (SAVE) {
-  client.connect(function(err) {
-    if (err) {
-      console.error('could not connect to postgres', err);
-      process.exit();
-    } else {
-      console.log('Connected to PostgreSQL');
-      getCourseLinks(function(courses, err) {
-        console.log('Scrape complete.');
-        client.on('drain', client.end.bind(client));
-      });
-    }
-  });
-
-  client.on('error', function(err) {
-    throw(err);
-  });
-
-} else {
-  getCourseLinks(function(courses, err) {
-    console.log('Scrape complete.');
-  });
-}
+ * DATABASE
+ */
 
 function insertCourseAndSections(courseObject, sectionObjects) {
-  var courseInsertion = insertCourse(courseObject, function(key) {
-    insertSections(sectionObjects, key);
-  });
-}
-
-function insertCourse(courseObject, callback) {
-  const course = courseObject;
-  var query = client.query({
-    text: 'INSERT INTO course (' +
-      'abbr,' +
-      'title,' +
-      'credits,' +
-      'description' +
-    ') VALUES ($1, $2, $3, $4)' +
-    'RETURNING id',
-    values: [
-      course.abbr,
-      course.title,
-      course.credits,
-      course.description,
-    ],
-    name: 'insert course',
+  // Insert a Course
+  const course = new Course({
+    title: courseObject.title,
+    abbr: courseObject.abbr,
+    credits: courseObject.credits,
+    description: courseObject.description,
   });
 
-  query.on('row', function(row) {
-    const id = row.id;
-    callback(id);
-  });
+  // Iterate through the array of sectionObjects and insert each
+  const sections = sectionObjects.map((s) => {
+    const section = new Section({
+      term: s.term,
+      session: s.session,
+      crn: s.crn,
+      section: s.sec,
+      credits: s.cr,
+      instructor: s.instructor,
+      startTime: s.startTime,
+      endTime: s.endTime,
+      days: s.days,
+      startDate: s.startDate,
+      endDate: s.endDate,
+      location: s.location,
+      campus: s.campus,
+      type: s.type,
+      status: s.status,
+      capacity: s.cap,
+      currentEnrollment: s.curr,
+      waitlistCapacity: s.wlcap,
+      waitlistCurrent: s.wlcurr,
+      fees: s.fees,
+      restrictions: s.restrictions,
+      comments: s.comments,
+    });
 
-  query.on('error', function(err) {
-    console.error(err);
+    // Join sections with their course
+    section.course = course;
+    return section;
   });
-}
-
-function insertSections(sectionObjectArray, courseId) {
-  _.each(sectionObjectArray, function(sectionObject) {
-    insertSection(sectionObject, courseId);
-  });
-}
-
-function insertSection(sectionObject, courseId) {
-  const section = sectionObject;
-
-  var query = client.query({
-    text: 'INSERT INTO section (' +
-      'crn,' +
-      'course_id,' +
-      'term,' +
-      'start_date,' +
-      'end_date,' +
-      'section,' +
-      'session,' +
-      'credits,' +
-      'instructor,' +
-      'days,' +
-      'start_time,' +
-      'end_time,' +
-      'location,' +
-      'campus,' +
-      'type,' +
-      'status,' +
-      'capacity,' +
-      'enrolled,' +
-      'waitlist_cap,' +
-      'waitlist_current,' +
-      'fees,' +
-      'restrictions,' +
-      'comments' +
-    ') VALUES (' +
-      '$1 , $2 , $3 , $4 , $5 , $6 , $7 , $8 , $9 , $10,' +
-      '$11, $12, $13, $14, $15, $16, $17, $18, $19, $20,' +
-      '$21, $22, $23' +
-    ')',
-    values: [
-      section.crn,
-      courseId,
-      section.term,
-      section.startDate,
-      section.endDate,
-      section.sec,
-      section.session,
-      section.cr,
-      section.instructor,
-      section.days,
-      section.startTime,
-      section.endTime,
-      section.location,
-      section.campus,
-      section.type,
-      section.status,
-      section.cap,
-      section.curr,
-      section.wlcurr,
-      section.wlcap,
-      section.fees,
-      section.restrictions,
-      section.comments,
-    ],
-    name: 'insert section',
-  });
-
-  query.on('error', function(err) {
-    console.error(err);
-  });
+  course.sections = sections;
+  course.saveAll();
 }
 
 /*
-  MAIN
-*/
+ * MAIN
+ */
+
 // Scrapes the search page for links to all course pages
 function getCourseLinks(callback) {
   request(COURSE_SEARCH_URL, function parseSearchPage(error, res, body) {
     if (!error && res.statusCode === 200) {
-      var classURLs = [];
-      var $ = cheerio.load(body);
+      const classURLs = [];
+      const $ = cheerio.load(body);
 
-      $('a[id^=\'ctl00_ContentPlaceHolder\']').each(function(i, element) {
-        var link = $(this).attr('href');
+      $('a[id^=\'ctl00_ContentPlaceHolder\']').each(function getLink() {
+        const link = $(this).attr('href');
         classURLs.push(link);
       });
 
       // First two elements are currently trash, don't attempt to scrape
       classURLs.splice(0, 2);
-      return getCourseInfo(CATALOG_URL, classURLs, callback);
+      return scrapeCourses(CATALOG_URL, classURLs, callback);
     }
   });
 }
 
 // Loads each course page into cheerio and calls parseCourse on it
-function getCourseInfo(baseURL, classURLs, callback) {
-  var index = 1;
+function scrapeCourses(baseURL, classURLs, callback) {
+  let index = 1;
 
-  async.eachSeries(classURLs, function(url, asyncCallback) {
+  async.eachSeries(classURLs, function iterateThroughCourses(url, asyncCallback) {
     const classURL = baseURL + url;
     console.log('Scraping ' + index++ + ' of ' + classURLs.length);
     console.log('URL: ' + classURL);
 
-    request(classURL, function(error, response, body) {
+    request(classURL, function requestCoursePage(error, response, body) {
       if (error) {
         console.error('Error scraping ' + classURL + '\n' + error);
       } else if (response.statusCode !== 200) {
@@ -197,7 +114,7 @@ function getCourseInfo(baseURL, classURLs, callback) {
         const $ = cheerio.load(body);
 
         const courseObject = parseCourse($);
-        var sectionObjects = parseSections($);
+        const sectionObjects = parseSections($);
         if (SAVE) {
           insertCourseAndSections(courseObject, sectionObjects);
         }
@@ -217,8 +134,8 @@ function getCourseInfo(baseURL, classURLs, callback) {
 }
 
 /*
-  PARSERS
-*/
+ * PARSERS
+ */
 
 function parseCourse($) {
   return {
@@ -234,13 +151,13 @@ function parseCourse($) {
 // non-words/whitespace with whitespace, remove spaces, tabs &
 // newlines, turn multiple spaces into one, remove spaces on ends
 function parseTitle($) {
-  var title = $('h3').text();
-  title = title.trim();
-  title = title.replace(/(^[A-Z]{1,4}\s[0-9]{2,3})/, '');
-  title = title.replace(/\(([^\)]+)\)/i, '');
-  title = title.replace(/[^\w\s]/gi, ' ');
-  title = title.replace(/\r?\n|\r|\t/g, '');
-  title = title.replace(/\ {2,}/g, ' ');
+  const title = $('h3').text()
+  .trim()
+  .replace(/(^[A-Z]{1,4}\s[0-9]{2,3})/, '')
+  .replace(/\(([^\)]+)\)/i, '')
+  .replace(/[^\w\s]/gi, ' ')
+  .replace(/\r?\n|\r|\t/g, '')
+  .replace(/\ {2,}/g, ' ');
   return title;
 }
 
@@ -255,41 +172,48 @@ function parseCredits($) {
   .text()
   .match(/\(([^\)]+)\)/i)[1]
   .split('-')
-  .map(function(value) {
+  .map((value) => {
     return parseInt(value, 10);
   });
 }
 
 // Gets course description from the class site
 function parseDesc($) {
-  var desc = $('#aspnetForm').first()
-                             .clone()
-                             .children()
-                             .remove()
-                             .end()
-                             .text()
-                             .trim();
+  let desc = $('#aspnetForm')
+  .first()
+  .clone()
+  .children()
+  .remove()
+  .end()
+  .text()
+  .trim();
   desc = trimNewlines(desc);
   return desc;
 }
 
-// Parses table of class sections
+/**
+ * Parses a table of class sections
+ * @param {object} $ - Cheerio object loaded with a course page's HTML
+ * @returns {object} Dictionary containing key: value pairs of scraped table
+ */
+
 function parseSections($) {
-  var columnNames = [];
-  $('th').each(function(i, element) {
-    var columnName = $(this).text().replace(/\r?\n|\r|\t/g, '');
-    columnName = columnName.replace(/\ {2,}/g, '');
+  const columnNames = [];
+  $('th').each(function parseSectionTableHeader() {
+    const columnName = $(this).text()
+    .replace(/\r?\n|\r|\t/g, '')
+    .replace(/\ {2,}/g, '');
     columnNames.push(columnName);
   });
 
-  var tableRows = $('#ctl00_ContentPlaceHolder1_SOCListUC1_gvOfferings > tr ');
-  var sections = [];
+  const tableRows = $('#ctl00_ContentPlaceHolder1_SOCListUC1_gvOfferings > tr ');
+  const sections = [];
 
-  tableRows.each(function parseSection(i, element) {
-    var sectionDict = {};
+  tableRows.each(function parseSection() {
+    const sectionDict = {};
     const td = $(this).children('td');
 
-    td.each(function(i) {
+    td.each(function parseSectionTableRow(i) {
       // Trim is likely not necessary
       const data = $(this).text().replace(/\s{2,}/g, ' ').trim();
       const key = formatKey(columnNames[i % columnNames.length]);
@@ -298,6 +222,10 @@ function parseSections($) {
       if (key === 'daytimedate') {
         const text = $(this).text();
         parseSectionDate(text, sectionDict);
+      } else if (key === 'cr') {
+        const cr = data.split('-');
+        // Check if the first element is blank
+        sectionDict.cr = cr[0].match(/\d{1,2}/g) ? cr : null;
       } else {
         sectionDict[key] = data;
       }
@@ -315,7 +243,7 @@ function parseSections($) {
 function parseSectionDate(text, sectionDict) {
   if (text.match(/\d+/g) && text.indexOf('TBA') === -1) {
     sectionDict.days = text
-    .match(/([A-Z])+/g)[0].split('');
+    .match(/([A-Z])+/g)[0];
 
     sectionDict.startTime = moment(text
     .match(/[0-9]{4}/g)[0], 'HHmm')
@@ -334,11 +262,11 @@ function parseSectionDate(text, sectionDict) {
 }
 
 /*
-  HELPER FUNCTIONS
-*/
+ * HELPER FUNCTIONS
+ */
 
 function trimNewlines(desc) {
-  var n = desc.indexOf('\n');
+  let n = desc.indexOf('\n');
   n = n === -1 ? desc.length : n;
   return desc.substring(0, n);
 }
