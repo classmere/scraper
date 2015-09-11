@@ -10,10 +10,8 @@
   "parser": "babel-eslint",
   "rules": {
     "quotes": [2, "single"],
-    "strict": [2, "never"],
+    "strict": [0, "never"],
     "semi": 2,
     "no-console": 0,
-    "no-use-before-define": 0,
-    "strict": 0
   }
 }
