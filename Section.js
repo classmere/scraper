@@ -1,20 +1,5 @@
-const thinky = require('thinky')({
-  host: process.env.DATABASE_HOST,
-  port: process.env.DATABASE_PORT,
-  db: process.env.DATABASE_DB,
-  authKey: process.env.DATABASE_KEY,
-  max: 10,
-});
-const type   = thinky.type;
-
-const Course = thinky.createModel('Course', {
-  id: type.string(),
-  title: type.string().required(),
-  abbr: type.string().max(10).required(),
-  credits: [type.number().integer().max(16)],
-  description: type.string(),
-  dateScraped: type.date().default(Date.now()),
-});
+const thinky = require('./thinky');
+const type = thinky.type;
 
 const Section = thinky.createModel('Section', {
   id: type.string(),
@@ -43,10 +28,8 @@ const Section = thinky.createModel('Section', {
   comments: type.string(),
 });
 
-Course.hasMany(Section, 'sections', 'id', 'idCourse');
+module.exports = Section;
+
+// Relations
+const Course = require('./Course');
 Section.belongsTo(Course, 'course', 'idCourse', 'id');
-
-Course.ensureIndex('abbr');
-
-exports.Course = Course;
-exports.Section = Section;
