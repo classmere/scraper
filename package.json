@@ -18,11 +18,13 @@
   },
   "homepage": "https://github.com/classmere/scraper",
   "dependencies": {
+    "async": "^1.4.2",
     "commander": "^2.8.1",
     "mocha": "^2.3.2",
-    "q": "^1.4.1",
+    "moment": "^2.10.6",
     "request": "^2.61.0",
-    "rethinkdb": "^2.1.1"
+    "rethinkdb": "^2.1.1",
+    "thinky": "^2.1.6"
   },
   "devDependencies": {
     "babel-eslint": "^4.1.0",
