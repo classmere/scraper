@@ -25,7 +25,10 @@ const Section = thinky.createModel('Section', {
   currentEnrollment: type.number().integer(),
   waitlistCapacity: type.number().integer(),
   waitlistCurrent: type.number().integer(),
-  fees: type.string(),
+  fees: [{
+    amount: type.number(),
+    description: type.string(),
+  }],
   restrictions: type.string(),
   comments: type.string(),
 });
