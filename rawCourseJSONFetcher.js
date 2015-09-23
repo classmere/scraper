@@ -17,118 +17,7 @@ const CATALOG_API =
 const COURSE_ENDPOINT = CATALOG_API + '/courses/all';
 const SECTION_ENDPOINT = CATALOG_API + '/course';
 
-function downloadCourseJSON(callback) {
-  console.log('Downloading course catalog from ' + COURSE_ENDPOINT);
-
-  request.get(COURSE_ENDPOINT, function handleResponse(error, res, body) {
-    if (res.statusCode !== 200) {
-      err = new Error('Got response code: ' +
-        res.statusCode +
-        ' from server');
-      callback(err);
-    } else if (error) {
-      callback(error);
-    } else {
-      const courseJSON = JSON.parse(body).slice(1, 50);
-      callback(null, courseJSON);
-    }
-  });
-}
-
-function courseSchemasFromCourseJSON(coursesJSON, callback) {
-  console.log('Creating Course Schemas');
-
-  const courses = coursesJSON.map((courseJSON) => {
-    let prereqs = [];
-    if (typeof courseJSON.CoursePrereqs !== 'undefined') {
-      prereqs = courseJSON.CoursePrereqs.map((prereqJSON) => {
-        return {
-          subjectCode: prereqJSON.SubjectCode,
-          courseNumber: prereqJSON.CourseNumber,
-        };
-      });
-    }
-
-    const creditArray = [];
-    if (typeof courseJSON.CreditLow !== 'undefined') {
-      creditArray.push(courseJSON.CreditLow);
-    }
-    if (typeof courseJSON.CreditHigh !== 'undefined') {
-      creditArray.push(courseJSON.CreditHigh);
-    }
-
-    const course = new Course({
-      title: courseJSON.Title,
-      subjectCode: courseJSON.SubjectCode,
-      courseNumber: courseJSON.CourseNumber,
-      credits: creditArray,
-      description: courseJSON.Description,
-      prereqs: prereqs,
-      dateScraped: Date.now(),
-    });
-
-    return course;
-  });
-
-  callback(null, courses);
-}
-
-function downloadSectionJSON(courseSchemas, callback) {
-  console.log('Downloading section JSON');
-  let sectionsJSON = [];
-  async.each(
-    courseSchemas,
-    function getCourse(course, innerCallback) {
-      console.log('Downloading course: ' +
-        course.subjectCode +
-        ' ' +
-        course.courseNumber
-      );
-      const ref = '/' + course.subjectCode + '/' + course.courseNumber;
-      const fullRef = SECTION_ENDPOINT + ref;
-      request.get(fullRef, function handleResponse(error, res, body) {
-        if (error) {
-          innerCallback(error);
-        } else if (res.statusCode !== 200) {
-          const err = new Error('Got response code: ' +
-            res.statusCode +
-            ' from server');
-          innerCallback(err);
-        } else {
-          sectionsJSON = JSON.parse(body).Offerings;
-          course.sections = sectionSchemasFromSectionJSON(sectionsJSON);
-          innerCallback();
-        }
-      });
-    },
-    function finishedGettingSections(err) {
-      callback(err, courseSchemas, sectionsJSON);
-    });
-}
-
-function insertCourses(courses, callback) {
-    // saves each course, calls callback when finished
-    console.log('Inserting ' + courses.length + ' courses into RethinkDB');
-    async.each(
-      courses,
-      function insertCourse(course, innerCallback) {
-        try {
-          course.validate();
-        } catch (err) {
-          innerCallback(null);
-          return;
-        }
-
-        course.saveAll(function doneSaving(err) {
-          if (err) {
-            console.error(err);
-          }
-          innerCallback(null);
-        });
-      },
-      callback
-    );
-  }
+// Helper functions
 
 function sectionMeetingTimesFromMeetingTimeJSONArray(meetingTimeJSONArray) {
   if (typeof meetingTimeJSONArray === 'undefined') {
@@ -187,6 +76,128 @@ function sectionSchemasFromSectionJSON(sectionsJSON) {
     });
   });
   return sections;
+}
+
+// Meaty functions
+
+function downloadCourseJSON(callback) {
+  console.log('Downloading course catalog from ' + COURSE_ENDPOINT);
+
+  request.get(COURSE_ENDPOINT, function handleResponse(error, res, body) {
+    if (res.statusCode !== 200) {
+      err = new Error('Got response code: ' +
+        res.statusCode +
+        ' from server');
+      callback(err);
+    } else if (error) {
+      callback(error);
+    } else {
+      const courseJSON = JSON.parse(body).slice(1);
+      callback(null, courseJSON);
+    }
+  });
+}
+
+function courseSchemasFromCourseJSON(coursesJSON, callback) {
+  console.log('Creating Course Schemas');
+
+  const courses = coursesJSON.map((courseJSON) => {
+    let prereqs = [];
+    if (typeof courseJSON.CoursePrereqs !== 'undefined') {
+      prereqs = courseJSON.CoursePrereqs.map((prereqJSON) => {
+        return {
+          subjectCode: prereqJSON.SubjectCode,
+          courseNumber: prereqJSON.CourseNumber,
+        };
+      });
+    }
+
+    const creditArray = [];
+    if (typeof courseJSON.CreditLow !== 'undefined') {
+      creditArray.push(courseJSON.CreditLow);
+    }
+    if (typeof courseJSON.CreditHigh !== 'undefined') {
+      creditArray.push(courseJSON.CreditHigh);
+    }
+
+    const course = new Course({
+      title: courseJSON.Title,
+      subjectCode: courseJSON.SubjectCode,
+      courseNumber: courseJSON.CourseNumber,
+      credits: creditArray,
+      description: courseJSON.Description,
+      prereqs: prereqs,
+      dateScraped: Date.now(),
+    });
+
+    return course;
+  });
+
+  callback(null, courses);
+}
+
+function downloadSectionJSON(courseSchemas, callback) {
+  console.log('Downloading section JSON');
+  let sectionsJSON = [];
+  async.eachLimit(
+    courseSchemas,
+    10, // Limit number of requests to not DDOS OSU's api
+    function getCourse(course, innerCallback) {
+      const ref = '/' + course.subjectCode + '/' + course.courseNumber;
+      const fullRef = SECTION_ENDPOINT + ref;
+      request.get(fullRef, function handleResponse(error, res, body) {
+        console.log('Parsing course: ' +
+          course.subjectCode +
+          ' ' +
+          course.courseNumber
+        );
+        if (error || body === null) {
+          error.message = 'Error occurred calling ' + fullRef;
+          console.error(error);
+        } else if (res.statusCode !== 200) {
+          const err = new Error('Got response code: ' +
+            res.statusCode +
+            ' from server');
+          console.error(err);
+        } else {
+          try {
+            sectionsJSON = JSON.parse(body).Offerings;
+            course.sections = sectionSchemasFromSectionJSON(sectionsJSON);
+          } catch (err) {
+            console.error(err);
+          }
+        }
+        innerCallback();
+      });
+    },
+    function finishedGettingSections(err) {
+      callback(err, courseSchemas, sectionsJSON);
+    });
+}
+
+function insertCourses(courses, callback) {
+    // saves each course, calls callback when finished
+  console.log('Inserting ' + courses.length + ' courses into RethinkDB');
+  async.each(
+    courses,
+    function insertCourse(course, innerCallback) {
+      try {
+        course.validate();
+      } catch (err) {
+        console.error(err);
+        innerCallback();
+        return;
+      }
+
+      course.saveAll(function doneSaving(err) {
+        if (err) {
+          console.error(err);
+        }
+        innerCallback();
+      });
+    },
+    callback
+  );
 }
 
 async.waterfall([
