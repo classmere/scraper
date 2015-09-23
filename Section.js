@@ -7,7 +7,7 @@ const Section = thinky.createModel('Section', {
   term: type.string().max(4),
   session: type.string(),
   crn: type.number().integer().max(99999),
-  credits: [type.number().integer().max(16)],
+  credits: [type.number().integer().max(40)],
   instructor: type.string(),
   meetingTimes: [{
     startTime: type.string(),
