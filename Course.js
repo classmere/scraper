@@ -16,7 +16,8 @@ const Course = thinky.createModel('Course', {
 });
 
 // Indexes
-Course.ensureIndex('abbr');
+Course.ensureIndex('subjectCode');
+Course.ensureIndex('courseNumber');
 
 module.exports = Course;
 
