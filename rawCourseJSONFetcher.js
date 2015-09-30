@@ -200,17 +200,19 @@ function insertCourses(courses, callback) {
   );
 }
 
-async.waterfall([
-  downloadCourseJSON,
-  courseSchemasFromCourseJSON,
-  downloadSectionJSON,
-  insertCourses,
-], function finished(err) {
-  if (err) {
-    console.error(err);
-    process.exit(1);
-  } else {
-    console.log('Operation completed successfully');
-    thinky.r.getPool().drain();
-  }
-});
+module.exports = function main() {
+  async.waterfall([
+    downloadCourseJSON,
+    courseSchemasFromCourseJSON,
+    downloadSectionJSON,
+    insertCourses,
+  ], function finished(err) {
+    if (err) {
+      console.error(err);
+      process.exit(1);
+    } else {
+      console.log('Operation completed successfully');
+      thinky.r.getPool().drain();
+    }
+  });
+};
