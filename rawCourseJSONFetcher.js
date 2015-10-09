@@ -53,26 +53,26 @@ function sectionSchemasFromSectionJSON(sectionsJSON) {
     }
 
     return new Section({
-      term: sectionJSON.TermShortDescription,
-      session: sectionJSON.Session,
-      crn: sectionJSON.CRN,
-      credits: creditArray,
-      instructor: sectionJSON.instructortor,
+      term: sectionJSON.TermShortDescription || null,
+      session: sectionJSON.Session || null,
+      crn: sectionJSON.CRN || null,
+      credits: creditArray || null,
+      instructor: sectionJSON.Instructor || null,
       meetingTimes: sectionMeetingTimesFromMeetingTimeJSONArray(
         sectionJSON.MeetingTimes
-      ),
-      startDate: moment(sectionJSON.StartDate).format(),
-      endDate: moment(sectionJSON.StartDate).format(),
-      campus: sectionJSON.Campus,
-      type: sectionJSON.ScheduleType,
-      status: sectionJSON.Status,
-      capacity: sectionJSON.MaxEnrollment,
-      currentEnrollment: calculateCurrent(sectionJSON.MaxEnrollment, sectionJSON.AvailableEnrollment),
-      waitlistCapacity: sectionJSON.MaxWait,
-      waitlistCurrent: calculateCurrent(sectionJSON.MaxWait, sectionJSON.AvailableWait),
+      ) || null,
+      startDate: moment(sectionJSON.StartDate).format() || null,
+      endDate: moment(sectionJSON.EndDate).format() || null,
+      campus: sectionJSON.Campus || null,
+      type: sectionJSON.ScheduleType || null,
+      status: sectionJSON.Status || null,
+      capacity: sectionJSON.MaxEnrollment || null,
+      currentEnrollment: calculateCurrent(sectionJSON.MaxEnrollment, sectionJSON.AvailableEnrollment) || null,
+      waitlistCapacity: sectionJSON.MaxWait || null,
+      waitlistCurrent: calculateCurrent(sectionJSON.MaxWait, sectionJSON.AvailableWait) || null,
       fees: null,
       restrictions: null,
-      comments: sectionJSON.Comments,
+      comments: sectionJSON.Comments || null,
     });
   });
   return sections;
