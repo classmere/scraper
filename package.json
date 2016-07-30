@@ -1,27 +1,27 @@
 {
-  "name": "classmere-scaper",
+  "name": "scraper",
   "version": "0.0.2",
-  "description": "Oregon State Course Catalog Scraper. Saves into MongoDB",
+  "description": "Oregon State Course Catalog Scraper",
+  "author": "Rutger Farry",
   "main": "scraper.js",
   "scripts": {
-    "start": "node --harmony scraper.js",
+    "start": "node scraper.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
+  "homepage": "http://classmere.com",
   "repository": {
     "type": "git",
     "url": "https://github.com/classmere/scraper.git"
   },
-  "author": "Rutger Farry",
-  "license": "MIT",
   "bugs": {
     "url": "https://github.com/classmere/scraper/issues"
   },
-  "homepage": "https://github.com/classmere/scraper",
   "dependencies": {
     "async": "^2.0.1",
     "cheerio": "^0.20.0",
     "moment": "^2.14.1",
     "mongoose": "^4.5.7",
     "request": "^2.74.0"
-  }
+  },
+  "license": "Apache-2.0"
 }
