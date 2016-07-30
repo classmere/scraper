@@ -14,7 +14,7 @@ const COURSE_SEARCH_URL = CATALOG_URL + 'CourseSearcher.aspx?chr=abg';
 // DATABASE
 /////////////////////////////////////////////////
 
-mongoose.connect('mongodb://localhost/test');
+mongoose.connect(process.env.MONGO_URL || 'mongodb://localhost/test');
 const db = mongoose.connection;
 
 const sectionSchema = new Schema({
