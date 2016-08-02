@@ -1,40 +1,35 @@
-const thinky = require('./thinky');
-const type = thinky.type;
+const mongoose = require('mongoose');
+const Schema   = mongoose.Schema;
 
-const Section = thinky.createModel('Section', {
-  id: type.string(),
-  idCourse: type.string(),
-  term: type.string().max(4),
-  session: type.string(),
-  crn: type.number().integer().max(99999),
-  credits: [type.number().integer().max(40)],
-  instructor: type.string(),
+const sectionSchema = new Schema({
+  idCourse: String,
+  term: String,
+  session: String,
+  crn: Number,
+  credits: [Number],
+  instructor: String,
   meetingTimes: [{
-    startTime: type.string(),
-    endTime: type.string(),
-    days: type.string().max(7),
-    buildingCode: type.string(),
-    roomCode: type.string(),
+    startTime: String,
+    endTime: String,
+    days: String,
+    buildingCode: String,
+    roomNumber: Number
   }],
-  startDate: type.date(),
-  endDate: type.date(),
-  campus: type.string(),
-  type: type.string(),
-  status: type.string(),
-  capacity: type.number().integer(),
-  currentEnrollment: type.number().integer(),
-  waitlistCapacity: type.number().integer(),
-  waitlistCurrent: type.number().integer(),
+  startDate: Date,
+  endDate: Date,
+  campus: String,
+  type: String,
+  status: String,
+  capacity: Number,
+  currentEnrollment: Number,
+  waitlistCapacity: Number,
+  waitlistCurrent: Number,
   fees: [{
-    amount: type.number(),
-    description: type.string(),
+    amount: Number,
+    description: String
   }],
-  restrictions: type.string(),
-  comments: type.string(),
+  restrictions: String,
+  comments: String
 });
 
-module.exports = Section;
-
-// Relations
-const Course = require('./Course');
-Section.belongsTo(Course, 'course', 'idCourse', 'id');
+module.exports.Section = mongoose.model('Section', sectionSchema);
