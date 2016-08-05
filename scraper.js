@@ -1,112 +1,69 @@
 'use strict';
 
-const mongoose = require('mongoose');
-const Schema   = mongoose.Schema;
-const request  = require('request');
-const cheerio  = require('cheerio');
-const async    = require('async');
-const moment   = require('moment');
+/*
+ * Fetches JSON from the OSU Course Catalog API and saves it to RethinkDB
+ */
+
+const async = require('async');
+const cheerio = require('cheerio');
+const moment = require('moment');
+const request = require('request');
+String = require('./stringExtensions');
+
+const fs = require('fs');
 
 const CATALOG_URL = 'http://catalog.oregonstate.edu/';
 const COURSE_SEARCH_URL = CATALOG_URL + 'CourseSearcher.aspx?chr=abg';
+const COLUMNS_PARAM = '&Columns=abcdefghijklmnopqrstuvwxyz{';
 
-/////////////////////////////////////////////////
-// DATABASE
-/////////////////////////////////////////////////
 
-mongoose.connect(process.env.MONGO_URL || 'mongodb://localhost/test');
-const db = mongoose.connection;
-
-const sectionSchema = new Schema({
-  term: String,
-  startDate: Date,
-  endDate: Date,
-  session: String,
-  crn: Number,
-  sec: Number,
-  credits: String,
-  instructor: String,
-  days: String,
-  startTime: Date,
-  endTime: Date,
-  location: String,
-  campus: String,
-  type: String,
-  status: String,
-  enrollCap: Number,
-  enrolled: Number,
-  waitlistCap: Number,
-  waitlisted: Number,
-  fees: String,
-  restrictions: String,
-  comments: String
-});
-
-const courseSchema = new Schema({
-  title: String,
-  abbr: String,
-  credits: String,
-  desc: String,
-  sections: [sectionSchema],
-  updated: { type: Date, default: Date.now },
-  meta: {
-    likes: Number,
-    dislikes: Number
-  }
-});
-
-const Course = mongoose.model('Course', courseSchema);
-
-/////////////////////////////////////////////////
-// MAIN
-/////////////////////////////////////////////////
-
-db.on('error', console.error.bind(console, 'connection error:'));
-db.once('open', function(callback) {
-  console.log('Connected to MongoDB @ ' + db.host + ':' + db.port);
-  getCourseLinks(function scrapeComplete(courses, err) {
-    console.log('Scrape complete.');
-    db.close();
+module.exports.test = (callback) => {
+  fs.readFile( __dirname + '/cs161.htm', function (_, html) {
+    const courseJson = parseCourseFromHTML(html);
+    callback(courseJson);
   });
-});
+};
 
-function getCourseLinks(callback) {
+module.exports.scrape = (callback) => {
+  getCourseUrls(callback);
+};
+
+function getCourseUrls(callback) {
   request(COURSE_SEARCH_URL, function parseSearchPage(error, res, body) {
     if (!error && res.statusCode === 200) {
       var classURLs = [];
       var $ = cheerio.load(body);
 
-      $('a[id^=\'ctl00_ContentPlaceHolder\']').each(function(i, element) {
+      $('a[id^=\'ctl00_ContentPlaceHolder\']').each(function() {
         var link = $(this).attr('href');
         classURLs.push(link);
       });
 
       // First two elements are currently trash, don't attempt to scrape
       classURLs.splice(0, 2);
-      return getCourseInfo(CATALOG_URL, classURLs, callback);
+      return getCoursePage(classURLs, callback);
     }
   });
 }
 
-function getCourseInfo(baseURL, classURLs, callback) {
+function getCoursePage(classUrls, callback) {
   var index = 1;
 
-  async.eachSeries(classURLs, function(url, asyncCallback) {
-    const classURL = baseURL + url;
-    console.log('Scraping ' + index++ + ' of ' + classURLs.length);
-    console.log('URL: ' + classURL);
+  async.eachSeries(classUrls, function(url, asyncCallback) {
+    const classUrl = CATALOG_URL + url + COLUMNS_PARAM;
+    console.log('Scraping ' + index++ + ' of ' + classUrls.length);
+    console.log('URL: ' + classUrl);
 
-    request(classURL, function scrapeClassPage(error, response, body) {
+    request(classUrl, function scrapeClassPage(error, response, body) {
       if (error) {
-        console.error('Error scraping ' + classURL + '\n' + error);
-        asyncCallback();
+        asyncCallback(error);
       }
       else if (response.statusCode !== 200) {
-        console.error('Reponse status code == ' + response.statusCode);
-        asyncCallback();
+        const error = new Error(`Server response was ${response.statusCode}`);
+        asyncCallback(error);
       }
       else {
-        parseCourseFromHTML(body);
+        console.log(parseCourseFromHTML(body));
         asyncCallback();
       }
     });
@@ -122,100 +79,123 @@ function getCourseInfo(baseURL, classURLs, callback) {
 }
 
 /////////////////////////////////////////////////
-// PARSERS
+// Parsers - Course
 /////////////////////////////////////////////////
 
 function parseCourseFromHTML(htmlBody) {
   var $ = cheerio.load(htmlBody);
 
-  var course = new Course({
-    title: parseTitle($),
-    abbr: parseAbbr($),
-    credits: parseCredits($),
-    desc: parseDesc($),
-    sections: parseTable($)
-  });
-
-  course.save(function(err) {
-    if (err) console.error(err);
-  });
+  return {
+    title: courseTitle($),
+    subjectCode: courseSubjectCode($),
+    courseNumber: courseNumber($),
+    credits: courseCredits($),
+    description: courseDesc($),
+    prereqs: [{
+      subjectCode: null,
+      courseNumber: null
+    }],
+    sections: courseSections($)
+  };
 }
 
 // Gets course title from the class site. Regex's follow these steps:
 // Select h3, remove abbreviation, remove credits, replace
 // non-words/whitespace with whitespace, remove spaces, tabs &
 // newlines, turn multiple spaces into one, remove spaces on ends
-function parseTitle($) {
-  var title = $('h3').text();
-  title = title.replace(/(^[A-Z]{1,4}\s[0-9]{2,3})/, '');
-  title = title.replace(/\(([^\)]+)\)/i, '');
-  title = title.replace(/[^\w\s]/gi, ' ');
-  title = title.replace(/\r?\n|\r|\t/g, '');
-  title = title.replace(/\ {2,}/g, ' ');
-  return title.trim();
+function courseTitle($) {
+  return $('h3').text()
+                .replace(/(^[A-Z]{1,4}\s[0-9]{2,3})/, '')
+                .replace(/\(([^\)]+)\)/i, '')
+                .replace(/[^\w\s]/gi, ' ')
+                .stripNewlines()
+                .stripExcessSpaces()
+                .trim();
 }
 
-// Gets course abbreviation from the class site
-function parseAbbr($) {
-  return $('h3').text().trim().match(/^[A-Z]{1,4}\s[0-9]{2,3}/)[0];
+function courseSubjectCode($) {
+  return $('h3').text()
+                .trim()
+                .match(/^[A-Z]{1,4}\s[0-9]{2,3}/)[0]
+                .split(' ')[0];
 }
 
-// Gets credits from the class site
-function parseCredits($) {
-  return $('h3').text().match(/\(([^\)]+)\)/i)[1];
+function courseNumber($) {
+  return $('h3').text()
+                .trim()
+                .match(/^[A-Z]{1,4}\s[0-9]{2,3}/)[0]
+                .split(' ')[1];
 }
 
-// Gets course description from the class site
-function parseDesc($) {
-  var desc = $('#aspnetForm').first()
-                             .clone()
-                             .children()
-                             .remove()
-                             .end()
-                             .text()
-                             .trim();
-  desc = trimNewlines(desc);
-  return desc;
+function courseCredits($) {
+  return $('h3').text()
+                .match(/\(([^\)]+)\)/i)[1];
 }
 
-// Parses table of class sections
-function parseTable($) {
-  var columnNames = [];
-  $('th').each(function(i, element) {
-    var columnName = $(this).text().replace(/\r?\n|\r|\t/g, '');
-    columnName = columnName.replace(/\ {2,}/g, '');
-    columnNames.push(columnName);
+function courseDesc($) {
+  return $('#aspnetForm').first()
+                         .clone()
+                         .children()
+                         .remove()
+                         .end()
+                         .text()
+                         .stripExcessSpaces()
+                         .stripNewlines();
+}
+
+function courseSections($) {
+  const columnNames = $('th').map(function(_, th) {
+    return $(th).text().stripNonAlphabetic().toLowerCase();
   });
 
-  var tableRows = $('#ctl00_ContentPlaceHolder1_SOCListUC1_gvOfferings > tr ');
-  var sections = [];
+  var table = $('#ctl00_ContentPlaceHolder1_SOCListUC1_gvOfferings');
 
-  tableRows.each(function(i, element) {
-    var sectionDict = {};
-    const td = $(this).children('td');
-
-    td.each(function(i) {
-      const data = $(this).text().replace(/\s{2,}/g, ' ').trim();
-      const key = formatKey(columnNames[i % columnNames.length]);
-
-      // Parse date
-      if (key === 'daytimedate') {
-        const text = $(this).text();
-        parseTableDate(text, sectionDict);
-      }
-      else {
-        sectionDict[key] = data;
-      }
+  const sections = table.find('tr').map(function(i, tr) {
+    var s = {};
+    $(tr).children().each(function(i, td) {
+      s[columnNames[i]] = $(td).html()
+                                     .stripNewlines()
+                                     .stripExcessSpaces();
     });
 
-    const section = createSection(sectionDict);
-    sections.push(section);
+    return {
+      term: s.term,
+      session: s.session,
+      crn: s.crn,
+      credits: s.cr,
+      instructor: s.instructor,
+      meetingTimes: [{
+        startTime: null,
+        endTime: null,
+        days: null,
+        buildingCode: null,
+        roomNumber: null
+      }],
+      startDate: s.startdate,
+      endDate: s.enddate,
+      campus: s.campus,
+      type: s.type,
+      status: s.status,
+      enrollmentCapacity: s.cap,
+      enrollmentCurrent: s.curr,
+      waitlistCapacity: s.wlcap,
+      waitlistCurrent: s.wlcurr,
+      fees: [{
+        amount: null,
+        description: null
+      }],
+      restrictions: s.restrictions,
+      comments: s.comments,
+      textbookUrl: null
+    };
   });
 
-  // First element will be categories, so remove it
-  sections.splice(0, 1);
   return sections;
 }
+
+/////////////////////////////////////////////////
+// HELPER FUNCTIONS
+/////////////////////////////////////////////////
 
 // Returns object w/ keys for days, startTime, endTime, startDate & endDate
 function parseTableDate(text, sectionDict) {
@@ -233,43 +213,50 @@ function parseTableDate(text, sectionDict) {
   }
 }
 
-/////////////////////////////////////////////////
-// HELPER FUNCTIONS
-/////////////////////////////////////////////////
-
-function trimNewlines(desc) {
-  var n = desc.indexOf('\n');
-  n = n === -1 ? desc.length : n;
-  return desc.substring(0, n);
+function startTime(text) {
+  return moment(text.match(/[0-9]{4}/g)[0], 'HHmm');
 }
 
-function formatKey(key) {
-  return key.toLowerCase().replace(/[^A-z]/g, '');
+function endTime(text) {
+  return moment(text.match(/[0-9]{4}/g)[1], 'HHmm');
 }
 
-function createSection(sectionDict) {
-  return {
-    term: sectionDict.term,
-    startDate: sectionDict.startDate,
-    endDate: sectionDict.endDate,
-    session: sectionDict.session,
-    crn: sectionDict.crn,
-    sectionNumber: sectionDict.sec,
-    credits: sectionDict.cr,
-    instructor: sectionDict.instructor,
-    days: sectionDict.days,
-    startTime: sectionDict.startTime,
-    endTime: sectionDict.endTime,
-    location: sectionDict.location,
-    campus: sectionDict.campus,
-    type: sectionDict.type,
-    status: sectionDict.status,
-    enrollCap: sectionDict.cap,
-    enrolled: sectionDict.curr,
-    waitlistCap: sectionDict.wlcap,
-    waitlisted: sectionDict.wlavail,
-    fees: sectionDict.fees,
-    restrictions: sectionDict.restrictions,
-    comments: sectionDict.comments
-  };
+function endTime(text) {
+  
+}
+
+function endTime(text) {
+  
+}
+
+function endTime(text) {
+  
+}
+
+function endTime(text) {
+  
+}
+
+function endTime(text) {
+  
+}
+
+function endTime(text) {
+  
+}
+
+function endTime(text) {
+  
+}
+
+function endTime(text) {
+  
+}
+
+function endTime(text) {
+  
+}
+
+function days(text) {
+  return text.match(/([A-Z])+/g)[0];
 }
