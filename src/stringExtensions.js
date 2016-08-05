@@ -1,4 +1,4 @@
-String.prototype.stripNonAlphabetic = function() {
+String.prototype.stripNonAlphanumeric = function() {
   return this.replace(/[^0-9a-z]/gi, '');
 };
 
