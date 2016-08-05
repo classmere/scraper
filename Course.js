@@ -1,5 +1,6 @@
 const mongoose = require('mongoose');
-const Schema   = mongoose.Schema;
+const Schema = mongoose.Schema;
+const sectionSchema = require('./Section');
 
 const courseSchema = new Schema({
   title: String,
@@ -11,7 +12,8 @@ const courseSchema = new Schema({
     subjectCode: String,
     courseNumber: Number
   }],
+  sections: [sectionSchema],
   updated: { type: Date, default: Date.now }
 });
 
-module.exports.Course = mongoose.model('Course', courseSchema);
+module.exports = mongoose.model('Course', courseSchema);

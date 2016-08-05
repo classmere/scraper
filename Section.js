@@ -2,7 +2,6 @@ const mongoose = require('mongoose');
 const Schema   = mongoose.Schema;
 
 const sectionSchema = new Schema({
-  idCourse: String,
   term: String,
   session: String,
   crn: Number,
@@ -29,7 +28,8 @@ const sectionSchema = new Schema({
     description: String
   }],
   restrictions: String,
-  comments: String
+  comments: String,
+  textbookUrl: String
 });
 
-module.exports.Section = mongoose.model('Section', sectionSchema);
+module.exports = mongoose.model('Section', sectionSchema);
