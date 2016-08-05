@@ -3,15 +3,10 @@
   "version": "0.0.2",
   "description": "Oregon State Course Catalog Scraper",
   "author": "Rutger Farry",
-  "license": "Apache-2.0",
-  "main": "build/scraper.js",
+  "main": "scraper.js",
   "scripts": {
-    "prestart": "npm run-script build",
-    "start": "node build/scraper.js",
-    "lint": "tslint src/*.ts",
-    "build": "tsc",
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "prepublish": "npm run-script build"
+    "start": "node app.js",
+    "test": "jasmine"
   },
   "homepage": "http://classmere.com",
   "repository": {
@@ -22,19 +17,14 @@
     "url": "https://github.com/classmere/scraper/issues"
   },
   "dependencies": {
-    "@types/async": "^1.4.28",
-    "@types/cheerio": "^0.17.29",
-    "@types/moment": "^2.11.28",
-    "@types/mongodb": "^2.1.29",
-    "@types/request": "0.0.27",
     "async": "^2.0.1",
     "cheerio": "^0.20.0",
     "moment": "^2.14.1",
-    "mongodb": "^2.2.5",
+    "mongoose": "^4.5.8",
     "request": "^2.74.0"
   },
+  "license": "Apache-2.0",
   "devDependencies": {
-    "tslint": "^3.14.0",
-    "typescript": "^2.0.0"
+    "jasmine": "^2.4.1"
   }
 }
