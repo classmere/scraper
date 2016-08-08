@@ -64,7 +64,7 @@ function getCoursePage(classUrls, callback) {
         asyncCallback(error);
       }
       else {
-        console.log(parseCourseFromHTML(body));
+        console.log(JSON.stringify(parseCourseFromHTML(body)));
         asyncCallback();
       }
     });
@@ -149,9 +149,11 @@ function courseSections($) {
     return $(th).text().stripNonAlphanumeric().toLowerCase();
   });
 
-  var table = $('#ctl00_ContentPlaceHolder1_SOCListUC1_gvOfferings');
+  // Exclude first row since it only consists of column names
+  var tableRows = $('#ctl00_ContentPlaceHolder1_SOCListUC1_gvOfferings').find('tr')
+                                                                        .slice(1);
 
-  const sections = table.find('tr').map(function(i, tr) {
+  const sections = tableRows.map(function(i, tr) {
     var s = {};
     $(tr).children().each(function(i, td) {
       s[columnNames[i]] = $(td).text()
@@ -159,119 +161,145 @@ function courseSections($) {
                                .stripExcessSpaces();
     });
 
+    const parse = new Parse();
+
     return {
-      term: term(s.term),
-      session: session(s.session),
-      crn: crn(s.crn),
-      credits: credits(s.cr),
-      instructor: instructor(s.instructor),
-      meetingTimes: meetingTimes(s.daytimedate, 
-                                 s.days, 
+      term: parse.term(s.term),
+      session: parse.session(s.session),
+      crn: parse.crn(s.crn),
+      credits: parse.credits(s.cr),
+      instructor: parse.instructor(s.instructor),
+      meetingTimes: parse.meetingTimes(s.daytimedate, 
                                  s.location),
-      startDate: startDate(s.startdate),
-      endDate: endDate(s.enddate),
-      campus: campus(s.campus),
-      type: type(s.type),
-      status: status(s.status),
-      enrollmentCapacity: enrollmentCapacity(s.cap),
-      enrollmentCurrent: enrollmentCurrent(s.curr),
-      waitlistCapacity: waitlistCapacity(s.wlcap),
-      waitlistCurrent: waitlistCurrent(s.wlcurr),
-      fees: fees(s.fees),
-      restrictions: restrictions(s.restrictions),
-      comments: comments(s.comments),
-      textbookUrl: textbookUrl(s.comments)
+      startDate: parse.startDate(s.startdate),
+      endDate: parse.endDate(s.enddate),
+      campus: parse.campus(s.campus),
+      type: parse.type(s.type),
+      status: parse.status(s.status),
+      enrollmentCapacity: parse.enrollmentCapacity(s.cap),
+      enrollmentCurrent: parse.enrollmentCurrent(s.curr),
+      waitlistCapacity: parse.waitlistCapacity(s.wlcap),
+      waitlistCurrent: parse.waitlistCurrent(s.wlcurr),
+      fees: parse.fees(s.fees),
+      restrictions: parse.restrictions(s.restrictions),
+      comments: parse.comments(s.comments),
+      textbookUrl: parse.textbookUrl(s.comments)
     };
   });
 
-  return sections;
+  return sections.toArray();
 }
 
-/////////////////////////////////////////////////
-// HELPER FUNCTIONS
-/////////////////////////////////////////////////
-
-
-function term(term) {
-  return term;
-}
-
-function session(session) {
-  return session;
-}
-
-function crn(crn) {
-  return crn;
-}
-
-function credits(credits) {
-  return credits;
-}
-
-function instructor(instructor) {
-  return instructor;
-}
-
-function meetingTimes(daytimedate, location) {
-  if (!daytimedate.match(/\d+/g) || daytimedate.includes('TBA')) return;
-
-  function times(text) {
-    return text.match(/[0-9]{4}/g).map((t) => { moment(t, 'HHmm'); });
+class Parse {
+  term(term) {
+    return term;
   }
 
-  function startTimes(text) {
-    return times(text).filter((_, i) => { i.isEven(); });
+  session(session) {
+    return session;
   }
 
-  function endTimes(text) {
-    return times(text).filter((_, i) => { i.isOdd(); });
+  crn(crn) {
+    return crn;
   }
 
-  function days(text) {
-    return text.match(/([A-Z])+/g)[0];
+  credits(credits) {
+    return credits;
   }
 
-  function buildingCodes(text) {
-    return text.split(' ').filter((_, i) => { i.isEven(); });
+  instructor(instructor) {
+    return instructor;
   }
 
-  function roomNumbers(text) {
-    return text.split(' ').filter((_, i) => { i.isOdd(); });
+  meetingTimes(daytimedate, location) {
+    if (!daytimedate.match(/\d+/g) || daytimedate.includes('TBA')) return;
+
+    function times(text) {
+      return text.match(/[0-9]{4}/g).map((t) => { return moment(t, 'HHmm'); });
+    }
+
+    function startTimes(text) {
+      return times(text).filter((_, i) => { return i.isEven(); });
+    }
+
+    function endTimes(text) {
+      return times(text).filter((_, i) => { return i.isOdd(); });
+    }
+
+    function days(text) {
+      return text.match(/([A-Z])+/g);
+    }
+
+    function buildingCodes(text) {
+      return text.split(' ').filter((_, i) => { return i.isEven(); });
+    }
+
+    function roomNumbers(text) {
+      return text.split(' ').filter((_, i) => { return i.isOdd(); });
+    }
+
+    return startTimes(daytimedate).map((_, i) => {
+      return {
+        startTime: startTimes(daytimedate)[i].format(),
+        endTime: endTimes(daytimedate)[i].format(),
+        days: days(daytimedate)[i],
+        buildingCode: buildingCodes(location)[i],
+        roomNumber: roomNumbers(location)[i]
+      };
+    });
   }
 
-  return [].push(startTimes(daytimedate))
-           .push(endTimes(daytimedate))
-           .push(days(daytimedate))
-           .push(buildingCodes(location))
-           .push(roomNumbers(location))
-           .map((arr) => {
-             return {
-               startTime: arr[0],
-               endTime: arr[1],
-               days: arr[2],
-               buildingCodes: arr[3],
-               roomNumbers: arr[4]
-             };
-           });
-}
+  startDate(startDate) {
+    return startDate;
+  }
 
-function startDate(startDate) {
-  return startDate;
-}
+  endDate(endDate) {
+    return endDate;
+  }
 
-function endDate(endDate) {
-  return endDate;
-}
+  campus(campus) {
+    return campus;
+  }
 
-function campus(campus) {
-  return campus;
-}
+  type(type) {
+    return type;
+  }
 
-function type(type) {
-  return type;
-}
+  status(status) {
+    return status;
+  }
 
-function status(status) {
-  return status;
-}
+  enrollmentCapacity (cap) {
+    return cap;
+  }
 
+  enrollmentCurrent (curr) {
+    return curr;
+  }
+
+  waitlistCapacity (wlcap) {
+    return wlcap;
+  }
+
+  waitlistCurrent (wlcurr) {
+    return wlcurr;
+  }
+
+  fees (fees) {
+    return fees;
+  }
+
+  restrictions (restrictions) {
+    return restrictions;
+  }
+
+  comments (comments) {
+    return comments;
+  }
+
+  textbookUrl (comments) {
+    return comments;
+  }
+};
+
+module.exports.Parse = Parse;
