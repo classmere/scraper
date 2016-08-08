@@ -8,52 +8,50 @@ const async = require('async');
 const cheerio = require('cheerio');
 const moment = require('moment');
 const request = require('request');
+
 String = require('./stringExtensions');
 Number = require('./numberExtensions');
 
-const fs = require('fs');
+var Readable = require('stream').Readable;
+var rs = new Readable({objectMode: true});
 
 const CATALOG_URL = 'http://catalog.oregonstate.edu/';
 const COURSE_SEARCH_URL = CATALOG_URL + 'CourseSearcher.aspx?chr=abg';
 const COLUMNS_PARAM = '&Columns=abcdefghijklmnopqrstuvwxyz{';
 
+module.exports.startScrapeStream = () => {
+  rs._read = function () {
+    getCourseUrls(function(courseUrls) {
+      getCoursePages(courseUrls, function(courseOrNull) {
+        rs.push(courseOrNull);
+      });
+    });
+  };
 
-module.exports.test = (callback) => {
-  fs.readFile( __dirname + '/cs161.htm', function (_, html) {
-    const courseJson = parseCourseFromHTML(html);
-    callback(courseJson);
-  });
+  return rs;
 };
 
-module.exports.scrape = (callback) => {
-  getCourseUrls(callback);
-};
-
-function getCourseUrls(callback) {
+function getCourseUrls(cb) {
   request(COURSE_SEARCH_URL, function parseSearchPage(error, res, body) {
     if (!error && res.statusCode === 200) {
-      var classURLs = [];
+      var courseUrls = [];
       var $ = cheerio.load(body);
 
       $('a[id^=\'ctl00_ContentPlaceHolder\']').each(function() {
         var link = $(this).attr('href');
-        classURLs.push(link);
+        courseUrls.push(link);
       });
 
       // First two elements are currently trash, don't attempt to scrape
-      classURLs.splice(0, 2);
-      return getCoursePage(classURLs, callback);
+      courseUrls.splice(0, 2);
+      cb(courseUrls);
     }
   });
 }
 
-function getCoursePage(classUrls, callback) {
-  var index = 1;
-
+function getCoursePages(classUrls, callback) {
   async.eachSeries(classUrls, function(url, asyncCallback) {
     const classUrl = CATALOG_URL + url + COLUMNS_PARAM;
-    console.log('Scraping ' + index++ + ' of ' + classUrls.length);
-    console.log('URL: ' + classUrl);
 
     request(classUrl, function scrapeClassPage(error, response, body) {
       if (error) {
@@ -64,7 +62,8 @@ function getCoursePage(classUrls, callback) {
         asyncCallback(error);
       }
       else {
-        console.log(JSON.stringify(parseCourseFromHTML(body)));
+        const course = parseCourseFromHTML(body);
+        callback(course);
         asyncCallback();
       }
     });
@@ -72,9 +71,10 @@ function getCoursePage(classUrls, callback) {
 
   function doneScraping(err) {
     if (err) {
-      console.error('An error occured scraping: ' + err);
+      callback(err);
+      callback(null);
     } else {
-      callback();
+      callback(null);
     }
   });
 }
@@ -300,6 +300,6 @@ class Parse {
   textbookUrl (comments) {
     return comments;
   }
-};
+}
 
 module.exports.Parse = Parse;
