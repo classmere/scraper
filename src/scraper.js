@@ -29,14 +29,15 @@ module.exports.startScrapeStream = () => {
         });
       });
   };
-
   return rs;
 };
 
 function getCourseUrls() {
   return new Promise(function(resolve, reject) {
     request(COURSE_SEARCH_URL, function parseSearchPage(error, res, body) {
-      if (!error && res.statusCode === 200) {
+      if (error) {
+        reject(error);
+      } else {
         var courseUrls = [];
         var $ = cheerio.load(body);
 
@@ -47,28 +48,31 @@ function getCourseUrls() {
 
         // First two elements are currently trash, don't attempt to scrape
         courseUrls.splice(0, 2);
-        resolve(courseUrls);
+        resolve(courseUrls.slice(0,5));
       }
     });
   });
 }
 
 function getCoursePage(url, callback) {
-  const courseUrl = CATALOG_URL + url + COLUMNS_PARAM;
-
-  request(courseUrl, function scrapeClassPage(error, response, body) {
-    if (error) {
-      console.err(error);
-    }
-    else if (response.statusCode !== 200) {
-      const error = new Error(`Server response was ${response.statusCode}`);
-      console.err(error);
-    }
-    else {
-      const course = parseCourseFromHTML(body);
-      callback(course);
-    }
-  });
+  if (!url) {
+    return null;
+  } else {
+    const courseUrl = CATALOG_URL + url + COLUMNS_PARAM;
+    request(courseUrl, function scrapeClassPage(error, response, body) {
+      if (error) {
+        console.err(error);
+      }
+      else if (response.statusCode !== 200) {
+        const error = new Error(`Server response was ${response.statusCode}`);
+        console.err(error);
+      }
+      else {
+        const course = parseCourseFromHTML(body);
+        callback(course);
+      }
+    });
+  }
 }
 
 /*
