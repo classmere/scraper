@@ -17,7 +17,7 @@ stream.on('data', (course) => {
 });
 
 stream.on('end', () => {
-  console.log('done');
+  console.log('done.');
   database.close();
   process.exit();
 });

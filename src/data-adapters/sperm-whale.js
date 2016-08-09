@@ -23,5 +23,5 @@ module.exports.insertCourse = function(course, cb) {
 };
 
 module.exports.close = function() {
-  connection.db.close();
+  connection.then((db) => db.close());
 };

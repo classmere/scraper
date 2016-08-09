@@ -25,6 +25,7 @@ module.exports.startScrapeStream = () => {
     courseUrls
       .then(function(urls) {
         getCoursePage(urls[i++], function(courseOrNull) {
+          if (i > urls.length) return rs.push(null);
           rs.push(courseOrNull);
         });
       });
@@ -48,7 +49,7 @@ function getCourseUrls() {
 
         // First two elements are currently trash, don't attempt to scrape
         courseUrls.splice(0, 2);
-        resolve(courseUrls.slice(0,5));
+        resolve(courseUrls);
       }
     });
   });
