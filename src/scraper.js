@@ -4,7 +4,6 @@
  * Fetches JSON from the OSU Course Catalog API and saves it to RethinkDB
  */
 
-const async = require('async');
 const cheerio = require('cheerio');
 const moment = require('moment');
 const request = require('request');
@@ -20,61 +19,54 @@ const COURSE_SEARCH_URL = CATALOG_URL + 'CourseSearcher.aspx?chr=abg';
 const COLUMNS_PARAM = '&Columns=abcdefghijklmnopqrstuvwxyz{';
 
 module.exports.startScrapeStream = () => {
+  const courseUrls = getCourseUrls();
+  var i = 0;
   rs._read = function () {
-    getCourseUrls(function(courseUrls) {
-      getCoursePages(courseUrls, function(courseOrNull) {
-        rs.push(courseOrNull);
+    courseUrls
+      .then(function(urls) {
+        getCoursePage(urls[i++], function(courseOrNull) {
+          rs.push(courseOrNull);
+        });
       });
-    });
   };
 
   return rs;
 };
 
-function getCourseUrls(cb) {
-  request(COURSE_SEARCH_URL, function parseSearchPage(error, res, body) {
-    if (!error && res.statusCode === 200) {
-      var courseUrls = [];
-      var $ = cheerio.load(body);
+function getCourseUrls() {
+  return new Promise(function(resolve, reject) {
+    request(COURSE_SEARCH_URL, function parseSearchPage(error, res, body) {
+      if (!error && res.statusCode === 200) {
+        var courseUrls = [];
+        var $ = cheerio.load(body);
 
-      $('a[id^=\'ctl00_ContentPlaceHolder\']').each(function() {
-        var link = $(this).attr('href');
-        courseUrls.push(link);
-      });
+        $('a[id^=\'ctl00_ContentPlaceHolder\']').each(function() {
+          var link = $(this).attr('href');
+          courseUrls.push(link);
+        });
 
-      // First two elements are currently trash, don't attempt to scrape
-      courseUrls.splice(0, 2);
-      cb(courseUrls);
-    }
+        // First two elements are currently trash, don't attempt to scrape
+        courseUrls.splice(0, 2);
+        resolve(courseUrls);
+      }
+    });
   });
 }
 
-function getCoursePages(classUrls, callback) {
-  async.eachSeries(classUrls, function(url, asyncCallback) {
-    const classUrl = CATALOG_URL + url + COLUMNS_PARAM;
+function getCoursePage(url, callback) {
+  const courseUrl = CATALOG_URL + url + COLUMNS_PARAM;
 
-    request(classUrl, function scrapeClassPage(error, response, body) {
-      if (error) {
-        asyncCallback(error);
-      }
-      else if (response.statusCode !== 200) {
-        const error = new Error(`Server response was ${response.statusCode}`);
-        asyncCallback(error);
-      }
-      else {
-        const course = parseCourseFromHTML(body);
-        callback(course);
-        asyncCallback();
-      }
-    });
-  },
-
-  function doneScraping(err) {
-    if (err) {
-      callback(err);
-      callback(null);
-    } else {
-      callback(null);
+  request(courseUrl, function scrapeClassPage(error, response, body) {
+    if (error) {
+      console.err(error);
+    }
+    else if (response.statusCode !== 200) {
+      const error = new Error(`Server response was ${response.statusCode}`);
+      console.err(error);
+    }
+    else {
+      const course = parseCourseFromHTML(body);
+      callback(course);
     }
   });
 }
