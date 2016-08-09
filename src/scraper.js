@@ -71,9 +71,9 @@ function getCoursePage(url, callback) {
   });
 }
 
-/////////////////////////////////////////////////
-// Parsers - Course
-/////////////////////////////////////////////////
+/*
+ * Parsers - Course
+ */
 
 function parseCourseFromHTML(htmlBody) {
   var $ = cheerio.load(htmlBody);
@@ -92,10 +92,13 @@ function parseCourseFromHTML(htmlBody) {
   };
 }
 
-// Gets course title from the class site. Regex's follow these steps:
-// Select h3, remove abbreviation, remove credits, replace
-// non-words/whitespace with whitespace, remove spaces, tabs &
-// newlines, turn multiple spaces into one, remove spaces on ends
+/*
+ * Gets course title from the class site. Regex's follow these steps:
+ * Select h3, remove abbreviation, remove credits, replace
+ * non-words/whitespace with whitespace, remove spaces, tabs &
+ * newlines, turn multiple spaces into one, remove spaces on ends 
+ */
+
 function courseTitle($) {
   return $('h3').text()
                 .replace(/(^[A-Z]{1,4}\s[0-9]{2,3})/, '')
