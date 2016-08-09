@@ -25,18 +25,20 @@ module.exports.startScrapeStream = () => {
     courseUrls
       .then(function(urls) {
         getCoursePage(urls[i++], function(courseOrNull) {
+          if (i > urls.length) return rs.push(null);
           rs.push(courseOrNull);
         });
       });
   };
-
   return rs;
 };
 
 function getCourseUrls() {
   return new Promise(function(resolve, reject) {
     request(COURSE_SEARCH_URL, function parseSearchPage(error, res, body) {
-      if (!error && res.statusCode === 200) {
+      if (error) {
+        reject(error);
+      } else {
         var courseUrls = [];
         var $ = cheerio.load(body);
 
@@ -54,26 +56,29 @@ function getCourseUrls() {
 }
 
 function getCoursePage(url, callback) {
-  const courseUrl = CATALOG_URL + url + COLUMNS_PARAM;
-
-  request(courseUrl, function scrapeClassPage(error, response, body) {
-    if (error) {
-      console.err(error);
-    }
-    else if (response.statusCode !== 200) {
-      const error = new Error(`Server response was ${response.statusCode}`);
-      console.err(error);
-    }
-    else {
-      const course = parseCourseFromHTML(body);
-      callback(course);
-    }
-  });
+  if (!url) {
+    return null;
+  } else {
+    const courseUrl = CATALOG_URL + url + COLUMNS_PARAM;
+    request(courseUrl, function scrapeClassPage(error, response, body) {
+      if (error) {
+        console.err(error);
+      }
+      else if (response.statusCode !== 200) {
+        const error = new Error(`Server response was ${response.statusCode}`);
+        console.err(error);
+      }
+      else {
+        const course = parseCourseFromHTML(body);
+        callback(course);
+      }
+    });
+  }
 }
 
-/////////////////////////////////////////////////
-// Parsers - Course
-/////////////////////////////////////////////////
+/*
+ * Parsers - Course
+ */
 
 function parseCourseFromHTML(htmlBody) {
   var $ = cheerio.load(htmlBody);
@@ -92,10 +97,13 @@ function parseCourseFromHTML(htmlBody) {
   };
 }
 
-// Gets course title from the class site. Regex's follow these steps:
-// Select h3, remove abbreviation, remove credits, replace
-// non-words/whitespace with whitespace, remove spaces, tabs &
-// newlines, turn multiple spaces into one, remove spaces on ends
+/*
+ * Gets course title from the class site. Regex's follow these steps:
+ * Select h3, remove abbreviation, remove credits, replace
+ * non-words/whitespace with whitespace, remove spaces, tabs &
+ * newlines, turn multiple spaces into one, remove spaces on ends 
+ */
+
 function courseTitle($) {
   return $('h3').text()
                 .replace(/(^[A-Z]{1,4}\s[0-9]{2,3})/, '')
