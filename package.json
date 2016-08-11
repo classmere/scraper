@@ -19,6 +19,7 @@
   "dependencies": {
     "cheerio": "^0.20.0",
     "moment": "^2.14.1",
+    "mongodb": "^2.2.5",
     "request": "^2.74.0"
   },
   "license": "Apache-2.0",
