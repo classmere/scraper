@@ -2,7 +2,7 @@
 
 const MongoClient = require('mongodb').MongoClient;
 
-const url = 'mongodb://localhost:27017/test';
+const url = process.env.MONGO_URL || 'mongodb://localhost:27017/test';
 const connection = MongoClient.connect(url);
 
 module.exports.insertCourse = function(course, cb) {
