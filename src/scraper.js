@@ -62,11 +62,10 @@ function getCoursePage(url, callback) {
     const courseUrl = CATALOG_URL + url + COLUMNS_PARAM;
     request(courseUrl, function scrapeClassPage(error, response, body) {
       if (error) {
-        console.err(error);
+        console.error(error);
       }
       else if (response.statusCode !== 200) {
-        const error = new Error(`Server response was ${response.statusCode}`);
-        console.err(error);
+        console.error(`Server response was ${response.statusCode} for GET ${courseUrl}`);
       }
       else {
         const course = parseCourseFromHTML(body);
