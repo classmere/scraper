@@ -18,20 +18,30 @@ const CATALOG_URL = 'http://catalog.oregonstate.edu/';
 const COURSE_SEARCH_URL = CATALOG_URL + 'CourseSearcher.aspx?chr=abg';
 const COLUMNS_PARAM = '&Columns=abcdefghijklmnopqrstuvwxyz{';
 
+/*
+ * Returns a Node readable stream of scraped courses
+ */
+
 module.exports.startScrapeStream = () => {
-  const courseUrls = getCourseUrls();
-  var i = 0;
+  const courseUrlsPromise = getCourseUrls();
+  const courseUrlsIteratorPromise = courseUrlsPromise.then(function(urls) {
+    return urls.values();
+  });
+
   rs._read = function () {
-    courseUrls
-      .then(function(urls) {
-        getCoursePage(urls[i++], function(courseOrNull) {
-          if (i > urls.length) return rs.push(null);
-          rs.push(courseOrNull);
-        });
+    courseUrlsIteratorPromise.then(function(urlsIterator) {
+      const nextUrl = urlsIterator.next().value;
+      getCoursePage(nextUrl, function(courseOrNull) {
+        nextUrl ? rs.push(courseOrNull) : rs.push(null);
       });
+    });
   };
   return rs;
 };
+
+/*
+ * Returns a set of unique course urls
+ */
 
 function getCourseUrls() {
   return new Promise(function(resolve, reject) {
@@ -39,16 +49,14 @@ function getCourseUrls() {
       if (error) {
         reject(error);
       } else {
-        var courseUrls = [];
+        var courseUrls = new Set();
         var $ = cheerio.load(body);
 
-        $('a[id^=\'ctl00_ContentPlaceHolder\']').each(function() {
+        $('a[id^=\'ctl00_ContentPlaceHolder1_gvResults\']').each(function() {
           var link = $(this).attr('href');
-          courseUrls.push(link);
+          courseUrls.add(link);
         });
 
-        // First two elements are currently trash, don't attempt to scrape
-        courseUrls.splice(0, 2);
         resolve(courseUrls);
       }
     });
