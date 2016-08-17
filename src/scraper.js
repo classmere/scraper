@@ -93,6 +93,7 @@ function parseCourseFromHTML(htmlBody) {
       subjectCode: null,
       courseNumber: null
     }],
+    updated: new Date(),
     sections: courseSections($)
   };
 }
