@@ -130,10 +130,10 @@ function courseSubjectCode($) {
 }
 
 function courseNumber($) {
-  return $('h3').text()
-                .trim()
-                .match(/^[A-Z]{1,4}\s[0-9]{2,3}/)[0]
-                .split(' ')[1];
+  return parseInt($('h3').text()
+                  .trim()
+                  .match(/^[A-Z]{1,4}\s[0-9]{2,3}/)[0]
+                  .split(' ')[1]);
 }
 
 function courseCredits($) {
@@ -208,11 +208,11 @@ class Parse {
   }
 
   crn(crn) {
-    return crn;
+    return parseInt(crn);
   }
 
   credits(credits) {
-    return credits;
+    return parseInt(credits);
   }
 
   instructor(instructor) {
@@ -239,11 +239,14 @@ class Parse {
     }
 
     function buildingCodes(text) {
-      return text.split(' ').filter((_, i) => { return i.isEven(); });
+      return text.split(' ')
+                 .filter((_, i) => { return i.isEven(); });
     }
 
     function roomNumbers(text) {
-      return text.split(' ').filter((_, i) => { return i.isOdd(); });
+      return text.split(' ')
+                 .filter((_, i) => { return i.isOdd(); })
+                 .map(parseInt);
     }
 
     return startTimes(daytimedate).map((_, i) => {
@@ -278,19 +281,19 @@ class Parse {
   }
 
   enrollmentCapacity (cap) {
-    return cap;
+    return parseInt(cap);
   }
 
   enrollmentCurrent (curr) {
-    return curr;
+    return parseInt(curr);
   }
 
   waitlistCapacity (wlcap) {
-    return wlcap;
+    return parseInt(wlcap);
   }
 
   waitlistCurrent (wlcurr) {
-    return wlcurr;
+    return parseInt(wlcurr);
   }
 
   fees (fees) {
