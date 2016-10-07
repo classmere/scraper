@@ -15,39 +15,42 @@ module.exports.insertCourse = function(course, cb) {
     const courses = db.collection('courses');
     const oldCourses = db.collection('courses.old');
 
-    courses.findOne({
+    courses
+    .findOne({
       subjectCode: course.subjectCode,
       courseNumber: course.courseNumber,
       title: course.title
-    }).then(function insertNewCourseOrAddVersionToOldCourseId(r) {
-      if (r === null) {
+    })
+    .then(function insertNewCourseOrAddVersionToOldCourseId(r) {
+
+      const oldId = r ? r['_id'] : null;
+
+      if (oldId == null || oldId == undefined) {
         // Just insert the course if a previous version doesn't exist
         course._version = 1;
         courses.insertOne(course)
         .then(completed);
-      } else {
+      } 
+      
+      else {
         const oldCourse = r;
         course._version = oldCourse._version + 1;
         oldCourse._id = {
-          _id: r._id,
+          _id: oldId,
           _version: r._version
         };
-        return oldCourse;
+        oldCourses.insertOne(oldCourse)
+        .then(function deleteOldCourseFromCurrentCollection(r) {
+          assert.equal(1, r.insertedCount);
+          return courses.deleteOne({ _id: r.insertedId._id });
+        })
+        .then(function putNewCourseInCurrentCollection(r) {
+          assert.equal(1, r.deletedCount);
+          return courses.insertOne(course);
+        })
+        .then(completed);
       }
     })
-    .then(function moveOldCourseToShadowCollection(r) {
-      const oldCourse = r;
-      return oldCourses.insertOne(oldCourse);
-    })
-    .then(function deleteOldCourseFromCurrentCollection(r) {
-      assert.equal(1, r.insertedCount);
-      return courses.deleteOne({ _id: r.insertedId._id });
-    })
-    .then(function putNewCourseInCurrentCollection(r) {
-      assert.equal(1, r.deletedCount);
-      return courses.insertOne(course);
-    })
-    .then(completed)
     .catch(errorCallback);
   });
 
@@ -66,6 +69,6 @@ module.exports.close = function() {
  */
 
 function errorCallback(err) {
-  console.err(err);
+  console.error(err);
   process.exit(1);
 }
