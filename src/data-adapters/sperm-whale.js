@@ -30,8 +30,8 @@ module.exports.insertCourse = function(course, cb) {
         course._version = 1;
         courses.insertOne(course)
         .then(completed);
-      } 
-      
+      }
+
       else {
         const oldCourse = r;
         course._version = oldCourse._version + 1;

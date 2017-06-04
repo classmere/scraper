@@ -19,21 +19,29 @@ if (process.argv.includes('--console')) {
 } else {
   // Pipe output to database
   const database = require('./src/data-adapters/sperm-whale');
+  let pendingInserts = 0;
+  let endEmitted = false;
+
   stream.on('data', (course) => {
+    pendingInserts++;
     database.insertCourse(course, function(err) {
       if (err) {
         database.close();
         process.err(err);
       } else {
         console.log(`inserted ${course.subjectCode} ${course.courseNumber}`);
+        pendingInserts--;
+        if (endEmitted && pendingInserts == 0) {
+          console.log(`done.`);
+          database.close();
+          process.exit();
+        }
       }
     });
   });
 
   stream.on('end', () => {
-    console.log('done.');
-    database.close();
-    process.exit();
+    endEmitted = true;
   });
 }
 
