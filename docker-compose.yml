@@ -1,0 +1,12 @@
+version: '2'
+services:
+  db:
+    image: mongo
+  scraper:
+    build: .
+    volumes:
+      - .:/classmere_scraper
+    environment:
+      - MONGO_URL=mongodb://db:27017/test
+    depends_on:
+      - db
