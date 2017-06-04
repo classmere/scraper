@@ -24,14 +24,14 @@ const COLUMNS_PARAM = '&Columns=abcdefghijklmnopqrstuvwxyz{';
 
 module.exports.startScrapeStream = () => {
   const courseUrlsPromise = getCourseUrls();
-  const courseUrlsIteratorPromise = courseUrlsPromise.then(function(urls) {
+  const courseUrlsIteratorPromise = courseUrlsPromise.then((urls) => {
     return urls.values();
   });
 
   rs._read = function () {
-    courseUrlsIteratorPromise.then(function(urlsIterator) {
+    courseUrlsIteratorPromise.then((urlsIterator) => {
       const nextUrl = urlsIterator.next().value;
-      getCoursePage(nextUrl, function(courseOrNull) {
+      getCoursePage(nextUrl, (courseOrNull) => {
         nextUrl ? rs.push(courseOrNull) : rs.push(null);
       });
     });
@@ -57,6 +57,7 @@ function getCourseUrls() {
           courseUrls.add(link);
         });
 
+        console.log(`${courseUrls.size} course urls fetched`);
         resolve(courseUrls);
       }
     });
@@ -65,7 +66,7 @@ function getCourseUrls() {
 
 function getCoursePage(url, callback) {
   if (!url) {
-    return null;
+    callback(null);
   } else {
     const courseUrl = CATALOG_URL + url + COLUMNS_PARAM;
     request(courseUrl, function scrapeClassPage(error, response, body) {
@@ -109,7 +110,7 @@ function parseCourseFromHTML(htmlBody) {
  * Gets course title from the class site. Regex's follow these steps:
  * Select h3, remove abbreviation, remove credits, replace
  * non-words/whitespace with whitespace, remove spaces, tabs &
- * newlines, turn multiple spaces into one, remove spaces on ends 
+ * newlines, turn multiple spaces into one, remove spaces on ends
  */
 
 function courseTitle($) {
@@ -177,7 +178,7 @@ function courseSections($) {
       crn: parse.crn(s.crn),
       credits: parse.credits(s.cr),
       instructor: parse.instructor(s.instructor),
-      meetingTimes: parse.meetingTimes(s.daytimedate, 
+      meetingTimes: parse.meetingTimes(s.daytimedate,
                                  s.location),
       startDate: parse.startDate(s.startdate),
       endDate: parse.endDate(s.enddate),

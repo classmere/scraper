@@ -4,3 +4,4 @@ RUN mkdir $name
 WORKDIR $name
 ADD . $name/
 RUN npm install
+CMD npm start
