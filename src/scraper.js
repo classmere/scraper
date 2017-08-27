@@ -1,5 +1,3 @@
-'use strict';
-
 /*
  * Fetches JSON from the OSU Course Catalog API and saves it to RethinkDB
  */

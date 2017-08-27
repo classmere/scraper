@@ -1,5 +1,3 @@
-'use strict';
-
 const scraper = require('./src/scraper');
 const stream = scraper.startScrapeStream();
 const Transform = require('stream').Transform;
