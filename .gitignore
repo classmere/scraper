@@ -25,7 +25,12 @@ build/Release
 # Dependency directory
 # https://www.npmjs.org/doc/misc/npm-faq.html#should-i-check-my-node_modules-folder-into-git
 node_modules
+
+# macOS files
 .DS_Store
+
+# Config files
 config.js
-.env
-rethinkdb_data
+
+# Packaged app binary
+/app
