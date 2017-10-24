@@ -9,7 +9,7 @@ option is to output data to a MongoDB database. This is accomplished by running
 the following line:
 
 ```bash
-yarn run start
+yarn start
 ```
 
 The MongoDB instance this scrapes into can be modified with the `MONGO_URL` 
@@ -20,5 +20,5 @@ Alternatively, the scraper can output course data straight to the command line.
 This is accomplished by appending the `--console` flag when calling the program like so:
 
 ```bash
-yarn run start -- --console
+yarn start -- --console
 ```
