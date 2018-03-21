@@ -6,7 +6,7 @@
   "main": "scraper.js",
   "scripts": {
     "start": "node app.js",
-    "test": "jasmine"
+    "test": "jest"
   },
   "homepage": "http://classmere.com",
   "repository": {
@@ -22,8 +22,8 @@
     "mongodb": "^2.2.5",
     "request": "^2.74.0"
   },
-  "license": "Apache-2.0",
+  "license": "MIT",
   "devDependencies": {
-    "jasmine": "^2.4.1"
+    "jest": "^22.4.3"
   }
 }

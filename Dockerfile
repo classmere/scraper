@@ -6,10 +6,10 @@ ENV PLATFORM linux
 ENV ARCH x64
 
 WORKDIR /usr/src
-RUN yarn global add pkg
+RUN npm install -g pkg
 
-COPY package.json yarn.lock ./
-RUN yarn install
+COPY package.json package-lock.json ./
+RUN npm install
 
 COPY . .
 RUN pkg -t ${NODE}-${PLATFORM}-${ARCH} app.js
